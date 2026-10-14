@@ -14,6 +14,16 @@ Output: one JSON object per game:
       {"ply", "score", "static", "best", "played", "random", "pvlen", "outcome"}]}
 where ply is the number of moves already played (the position is reproduced by replaying
 moves[:ply]) and outcome is +1 / 0 / -1 from the side to move's perspective.
+
+    hive-label --relabel runs/labels.jsonl.gz --depths 3,4,5 --source-depth 4
+
+Labels the positions of existing games again, as a function of the position only: for
+every labeled ply and every depth, a fresh player (no transposition table or history from
+earlier searches, `newgame` with the moves so far) searches with one thread and a
+16 MiB table. The engine orders the root moves by a seed taken from the position, so the
+same position gets the same score in any game, order or machine. The records come back
+with "depth" (the depth the games were played at) and, per position,
+"scores": {"3": ..., "4": ..., "5": ...}; "score" is left as recorded.
 """
 
 from __future__ import annotations
@@ -28,6 +38,7 @@ import time
 from multiprocessing import Pool
 from typing import Any
 
+from .encode import read_games
 from .game import random_opening
 from .uhp import Engine, PlayerSpec, game_state
 
@@ -87,8 +98,44 @@ def label_game(
     }
 
 
+LABEL_OPTIONS = "TableSizeMiB=16"  # part of the label's definition, like the depth
+
+
+def game_string(game_type: str, moves: list[str]) -> str:
+    """UHP game string for `newgame` (nokamute ignores the state and turn fields)."""
+    return ";".join([game_type, "InProgress", "White[1]", *moves])
+
+
+def label_position(
+    eng: Engine, game_type: str, moves: list[str], depths: list[int]
+) -> dict[str, int | None]:
+    """Root score at each depth of the position after `moves`, each from a fresh player."""
+    scores: dict[str, int | None] = {}
+    for depth in depths:
+        eng.newgame(game_string(game_type, moves))
+        scores[str(depth)] = eng.search(depth)[1]
+    return scores
+
+
+def relabel_game(game: Game, depths: list[int], source_depth: int) -> Game:
+    """`game` with `depth` and per position `scores` added; see the module docstring."""
+    with Engine(PlayerSpec.parse(f"depth=1,{LABEL_OPTIONS}")) as eng:
+        positions = [
+            {
+                **p,
+                "scores": label_position(eng, game["game_type"], game["moves"][: p["ply"]], depths),
+            }
+            for p in game["positions"]
+        ]
+    return {**game, "depth": source_depth, "positions": positions}
+
+
 def _label(task: Task) -> Game:
     return label_game(*task)
+
+
+def _relabel(task: tuple[Game, list[int], int]) -> Game:
+    return relabel_game(*task)
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -106,15 +153,47 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 2))
     p.add_argument("--engine-options", default="", help="extra spec items, e.g. Aggression=5")
     p.add_argument("--out", help="jsonl output (default runs/labels-<timestamp>.jsonl)")
+    p.add_argument("--relabel", metavar="GAMES", help="label these games' positions again")
+    p.add_argument("--depths", default="3,4,5", help="with --relabel: depths to search")
+    p.add_argument(
+        "--source-depth", type=int, help="with --relabel: depth the games were played at"
+    )
     return p.parse_args(argv)
+
+
+def relabel(args: argparse.Namespace) -> int:
+    """The --relabel mode of `main`."""
+    if args.source_depth is None:
+        raise SystemExit("--relabel needs --source-depth")
+    depths = [int(d) for d in args.depths.split(",")]
+    games = read_games(args.relabel)
+    out = args.out or os.path.join(RUNS, f"relabel-{dt.datetime.now():%Y%m%d-%H%M%S}.jsonl")
+    print(f"{len(games)} games, depths {depths}, {args.workers} workers -> {out}", file=sys.stderr)
+    tasks = [(g, depths, args.source_depth) for g in games]
+    n_pos = 0
+    t0 = time.perf_counter()
+    with open(out, "w") as f, Pool(args.workers) as pool:
+        for n, game in enumerate(pool.imap(_relabel, tasks, chunksize=4), 1):
+            n_pos += len(game["positions"])
+            f.write(json.dumps(game) + "\n")
+            if n % 10 == 0 or n == len(games):
+                elapsed = time.perf_counter() - t0
+                rate = n_pos / elapsed
+                print(
+                    f"[{n}/{len(games)} {elapsed:.0f}s] {n_pos} positions ({rate:.0f}/s)",
+                    file=sys.stderr,
+                )
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     """Label the requested number of games; returns the process exit code."""
     args = _parse_args(argv)
+    os.makedirs(RUNS, exist_ok=True)
+    if args.relabel:
+        return relabel(args)
     limit = f"seconds={args.seconds}" if args.seconds else f"depth={args.depth}"
     spec = PlayerSpec.parse(",".join(filter(None, [limit, args.engine_options])))
-    os.makedirs(RUNS, exist_ok=True)
     out = args.out or os.path.join(RUNS, f"labels-{dt.datetime.now():%Y%m%d-%H%M%S}.jsonl")
     tasks: list[Task] = [
         (

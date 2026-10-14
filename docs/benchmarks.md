@@ -2,6 +2,37 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-14: a deterministic search, and labels as a function of the position
+
+Re-searching 40 depth 4 games (2,323 positions) at depth 4, one thread: 2.7% of the scores
+differ from the stored ones, and two fresh runs differ from each other by as much (3.3%,
+median 5 points, max ~40). The engine changes since the data was made do not matter
+(engine 493eb5f, which made it, gives the same picture). The cause is minimax 0.6.0
+shuffling the root moves with an OS seeded generator before every search; null move
+pruning, the transposition table and aspiration windows make the root value depend on
+that order. The fork now vendors minimax with that shuffle seeded by the position's hash
+(splitmix64, stable across platforms). Fork vs fork games are now a function of the
+opening; 1.0.3 is unchanged.
+
+Labels are now a function of the position only: a fresh engine per position and depth
+(`newgame` with the moves so far, one thread, 16 MiB table). Cost on 20 games, 889
+positions, 14 workers:
+
+| | depth 4 | depth 5 |
+|---|---|---|
+| warm, game replayed in order (as labeled so far) | 30 s | 317 s |
+| fresh engine per position, 100 MiB table (default) | 153 s | 412 s |
+| fresh engine per position, 16 MiB table | 33 s | 324 s |
+
+The default table's allocation was the whole overhead. Two relabels of the 40 games at
+depths 3, 4 and 5 with 14 and with 5 workers are identical; against the stored depth 4
+scores 4.1% differ (median 5, max 34), the old noise plus the cold start. 16 positions/s
+for depths 3+4+5 on 14 workers.
+
+Same positions, three depths: mean clamped score for the side to move +82 at depth 3, +10
+at depth 4, +124 at depth 5; correlation 0.91 between depths 3 and 4, 0.87 between 4 and 5.
+The side to move bias is a property of odd search depths, not of the depth 5 games.
+
 ## 2026-10-14: the depth 5 nets in play, and a holdout leak
 
 Colab v6e-1 (44 vCPUs, 22 games in parallel on the clock), 800 games unless noted:

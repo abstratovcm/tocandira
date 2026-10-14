@@ -34,6 +34,7 @@ from .encode import MAX_PIECES, geometry
 SCALE = 400.0  # score units per logit: a +400 score is a 73% win probability
 CLAMP = 3000  # scores beyond this (forced wins are ±32767) count as decisive
 ARRAYS = ("own", "opp", "hand", "score", "static", "outcome", "ply", "game", "random")
+OPTIONAL = ("opening", "source")  # layout version 3, plus one `score<depth>` per searched depth
 
 Data = dict[str, npt.NDArray[Any]]
 Meta = dict[str, Any]
@@ -46,7 +47,7 @@ def load_shards(paths: list[str]) -> tuple[Data, Meta]:
     two sessions encoding into one Drive folder leave identical copies, and with their own
     game ids a held out game's copy would land in the training set.
     """
-    parts: dict[str, list[npt.NDArray[Any]]] = {k: [] for k in ARRAYS}
+    parts: dict[str, list[npt.NDArray[Any]]] = {}
     meta: Meta = {}
     seen: set[str] = set()
     duplicates = 0
@@ -63,9 +64,13 @@ def load_shards(paths: list[str]) -> tuple[Data, Meta]:
             if meta and m["radius"] != meta["radius"]:
                 raise ValueError(f"{path}: radius {m['radius']} differs from {meta['radius']}")
             meta = {"radius": m["radius"], "num_features": m["num_features"], "shards": i + 1}
-            for k in ARRAYS:
+            extra = [k for k in d.files if k in OPTIONAL or (k[:5] == "score" and k[5:].isdigit())]
+            keys = [*ARRAYS, *sorted(extra)]
+            if parts and sorted(parts) != sorted(keys):
+                raise ValueError(f"{path}: arrays {sorted(keys)} differ from {sorted(parts)}")
+            for k in keys:
                 arr = d[k].astype(np.int64) + i * 10_000_000 if k == "game" else d[k]
-                parts[k].append(arr)
+                parts.setdefault(k, []).append(arr)
     meta["duplicates"] = duplicates
     return {k: np.concatenate(v) for k, v in parts.items()}, meta
 
@@ -73,7 +78,10 @@ def load_shards(paths: list[str]) -> tuple[Data, Meta]:
 def split_by_game(
     game: npt.NDArray[Any], holdout: float = 0.05, seed: int = 0
 ) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]:
-    """(train, validation) position indices; whole games are held out, never single positions."""
+    """(train, validation) position indices; whole games are held out, never single positions.
+
+    `game` can be any grouping key per position, e.g. the opening.
+    """
     games = np.unique(game)
     np.random.default_rng(seed).shuffle(games)
     held = np.isin(game, games[: max(1, int(len(games) * holdout))])
@@ -88,6 +96,25 @@ def win_prob(score: Tensor) -> Tensor:
 def target(score: Tensor, outcome: Tensor, lam: float) -> Tensor:
     """Training target: `lam` of the search score, the rest from the final outcome."""
     return lam * win_prob(score) + (1 - lam) * (outcome + 1) / 2
+
+
+def target_score(data: Data, target: str) -> npt.NDArray[np.float32]:
+    """The score a net is trained on, per position.
+
+    `"score"` is the depth the games were labeled at; `"d5"`, `"d45"`, ... (relabeled data)
+    take the mean of those depths' win probabilities, back in score units. Averaging an odd
+    and an even depth cancels most of the side to move bias of an odd depth search.
+    """
+    if target == "score":
+        return data["score"].astype(np.float32)
+    if not (target[:1] == "d" and target[1:].isdigit()):
+        raise ValueError(f"target {target!r}: expected 'score' or 'd' and depths, e.g. 'd45'")
+    probs = [
+        1 / (1 + np.exp(-np.clip(data[f"score{d}"].astype(np.float64), -CLAMP, CLAMP) / SCALE))
+        for d in target[1:]
+    ]
+    p = np.mean(probs, axis=0)
+    return (SCALE * np.log(p / (1 - p))).astype(np.float32)
 
 
 class Nnue(nn.Module):
@@ -122,26 +149,36 @@ class Metrics:
     # loss: MSE in win probability space against the blended target.
     # pearson: correlation with the clamped search score.
     # sign_agreement: fraction of decided, non forced positions whose sign matches the outcome.
+    # pearson_d5: correlation with the clamped depth 5 score, when the data has one: the
+    # yardstick that compares nets trained on different targets.
     loss: float
     pearson: float
     sign_agreement: float
     n: int
+    pearson_d5: float | None = None
 
     def __str__(self) -> str:
+        d5 = "" if self.pearson_d5 is None else f"  pearson d5 {self.pearson_d5:.3f}"
         return (
-            f"loss {self.loss:.4f}  pearson {self.pearson:.3f}  "
+            f"loss {self.loss:.4f}  pearson {self.pearson:.3f}{d5}  "
             f"sign agreement {100 * self.sign_agreement:.1f}%  (n={self.n})"
         )
 
 
-def metrics(pred: Tensor, score: Tensor, outcome: Tensor, lam: float) -> Metrics:
+def _pearson(pred: Tensor, score: Tensor) -> float:
+    clamped = score.clamp(-CLAMP, CLAMP)
+    return torch.corrcoef(torch.stack([pred.float(), clamped.float()]))[0, 1].item()
+
+
+def metrics(
+    pred: Tensor, score: Tensor, outcome: Tensor, lam: float, score5: Tensor | None = None
+) -> Metrics:
     """Metrics of any score like prediction (the net's output or the static eval)."""
     loss = ((win_prob(pred) - target(score, outcome, lam)) ** 2).mean().item()
-    clamped = score.clamp(-CLAMP, CLAMP)
-    pearson = torch.corrcoef(torch.stack([pred.float(), clamped.float()]))[0, 1].item()
     decided = (outcome != 0) & (score.abs() < CLAMP)
     agree = (torch.sign(pred[decided]) == outcome[decided]).float().mean().item()
-    return Metrics(loss, pearson, agree, int(decided.sum().item()))
+    d5 = None if score5 is None else _pearson(pred, score5)
+    return Metrics(loss, _pearson(pred, score), agree, int(decided.sum().item()), d5)
 
 
 @dataclass
@@ -158,6 +195,7 @@ class Config:
     lr_gamma: float = 0.9  # exponential decay per epoch
     weight_decay: float = 1e-4
     lam: float = 0.75
+    target: str = "score"  # see `target_score`
     holdout: float = 0.05
     seed: int = 0
     augment: bool = True  # random D6 symmetry per batch
@@ -174,6 +212,11 @@ class Tensors:
         self.score = torch.from_numpy(data["score"].astype(np.float32)).to(device)
         self.static = torch.from_numpy(data["static"].astype(np.float32)).to(device)
         self.outcome = torch.from_numpy(data["outcome"].astype(np.float32)).to(device)
+        self.score5 = (
+            torch.from_numpy(data["score5"].astype(np.float32)).to(device)
+            if "score5" in data
+            else None
+        )
         tables = geometry(int(meta["radius"])).d6_tables()
         tables = np.concatenate([tables, np.full((12, 1), self.pad, dtype=np.int32)], axis=1)
         self.tables = torch.from_numpy(tables.astype(np.int64)).to(device)
@@ -197,7 +240,8 @@ def evaluate(model: Nnue, t: Tensors, idx: Tensor, lam: float, batch: int = 1638
             chunk = idx[start : start + batch]
             own, opp = t.features(chunk, None)
             preds.append(model(own, opp, t.hand[chunk]))
-    return metrics(torch.cat(preds), t.score[idx], t.outcome[idx], lam)
+    score5 = None if t.score5 is None else t.score5[idx]
+    return metrics(torch.cat(preds), t.score[idx], t.outcome[idx], lam, score5)
 
 
 def _run_epoch(
@@ -253,12 +297,16 @@ def train(
     torch.manual_seed(cfg.seed)
     os.makedirs(out_dir, exist_ok=True)
     cfg.radius = int(meta["radius"])
-    t = Tensors(data, meta, device)
-    train_np, val_np = split_by_game(data["game"], cfg.holdout, cfg.seed)
+    t = Tensors({**data, "score": target_score(data, cfg.target)}, meta, device)
+    # Games sharing an opening (the depth 4 and depth 5 games were played from the same
+    # seeds) are held out together, so no held out position has a near twin in training.
+    groups = data["opening"] if "opening" in data else data["game"]
+    train_np, val_np = split_by_game(groups, cfg.holdout, cfg.seed)
     train_idx = torch.from_numpy(train_np).to(device)
     val_idx = torch.from_numpy(val_np).to(device)
     log(f"{len(train_idx)} training positions, {len(val_idx)} held out, device {device}")
-    baseline = metrics(t.static[val_idx], t.score[val_idx], t.outcome[val_idx], cfg.lam)
+    score5 = None if t.score5 is None else t.score5[val_idx]
+    baseline = metrics(t.static[val_idx], t.score[val_idx], t.outcome[val_idx], cfg.lam, score5)
     log(f"baseline (static eval): {baseline}")
 
     model = Nnue(int(meta["num_features"]), cfg.hidden, cfg.l2).to(device)
@@ -317,10 +365,12 @@ def sweep(
     rows = [("static eval", "", first.baseline)] + [
         (name, str(r.best_epoch), r.best) for name, r in results.items()
     ]
-    log(f"\n{'run':<14}{'epoch':>6}  {'loss':>7}  {'pearson':>8}  {'sign':>6}")
+    log(f"\n{'run':<14}{'epoch':>6}  {'loss':>7}  {'pearson':>8}  {'d5':>6}  {'sign':>6}")
     for name, epoch, m in rows:
+        d5 = "" if m.pearson_d5 is None else f"{m.pearson_d5:.3f}"
         log(
-            f"{name:<14}{epoch:>6}  {m.loss:7.4f}  {m.pearson:8.3f}  {100 * m.sign_agreement:5.1f}%"
+            f"{name:<14}{epoch:>6}  {m.loss:7.4f}  {m.pearson:8.3f}  {d5:>6}  "
+            f"{100 * m.sign_agreement:5.1f}%"
         )
     return results
 

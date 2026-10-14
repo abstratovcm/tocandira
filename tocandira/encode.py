@@ -20,14 +20,17 @@ see `Geometry.d6_tables()`, usable as free augmentation at training time.
 
 Dataset layout (`np.savez_compressed`): `own`, `opp` int16 [N, 28] padded with -1,
 `hand` int8 [N, 16], `score` int16, `static` int16 (the engine's hand tuned evaluation,
-the baseline), `outcome` int8, `ply` int16, `game` int32, `random` bool, `meta` JSON
-(version, radius, num_features, ...).
+the baseline), `outcome` int8, `ply` int16, `game` int32, `random` bool, `opening` int64
+(hash of the game's first 4 moves), `source` int8 (depth the game was played at, 0 if not
+recorded), `meta` JSON (version, radius, num_features, depths, ...). Relabeled games
+(`hive-label --relabel`) add one int16 array per searched depth: `score3`, `score4`, ...
 """
 
 from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import os
 import sys
@@ -199,6 +202,15 @@ def encode_game(game: dict[str, Any], radius: int = RADIUS) -> list[Row]:
     return rows
 
 
+OPENING_PLIES = 4  # hive-label's random opening length
+
+
+def opening_key(moves: list[str]) -> int:
+    """Stable int64 key of a game's opening: games sharing it are held out together."""
+    digest = hashlib.sha1(";".join(moves[:OPENING_PLIES]).encode()).digest()
+    return int.from_bytes(digest[:8], "little", signed=True)
+
+
 def _pad(lists: list[list[int]]) -> npt.NDArray[np.int16]:
     arr = np.full((len(lists), MAX_PIECES), -1, dtype=np.int16)
     for i, feats in enumerate(lists):
@@ -224,14 +236,28 @@ def encode_dataset(path: str, out: str, workers: int = 1, radius: int = RADIUS) 
         per_game = [encoder(g) for g in games]
     rows = [row for rows in per_game for row in rows]
     game_ids = [g["id"] for g, rows in zip(games, per_game, strict=True) for _ in rows]
+    openings = [
+        opening_key(g["moves"]) for g, rows in zip(games, per_game, strict=True) for _ in rows
+    ]
+    sources = [g.get("depth", 0) for g, rows in zip(games, per_game, strict=True) for _ in rows]
+    # Rows follow each game's positions in ply order (`encode_game`).
+    ordered = [p for g in games for p in sorted(g["positions"], key=lambda p: int(p["ply"]))]
+    depths = sorted({int(d) for p in ordered for d in p.get("scores", {})})
+    if any(sorted(int(d) for d in p.get("scores", {})) != depths for p in ordered):
+        raise ValueError(f"{path}: positions searched at different depths")
+    scores: dict[str, Any] = {
+        f"score{d}": np.array([p["scores"][str(d)] or 0 for p in ordered], dtype=np.int16)
+        for d in depths
+    }
     meta = {
-        "version": 2,
+        "version": 3,
         "radius": radius,
         "levels": LEVELS,
         "num_features": geometry(radius).num_features,
         "bugs": BUGS,
         "max_pieces": MAX_PIECES,
         "source": os.path.basename(path),
+        "depths": depths,
     }
     np.savez_compressed(
         out,
@@ -244,6 +270,9 @@ def encode_dataset(path: str, out: str, workers: int = 1, radius: int = RADIUS) 
         game=np.array(game_ids, dtype=np.int32),
         random=np.array([r[6] for r in rows], dtype=bool),
         static=np.array([r[7] for r in rows], dtype=np.int16),
+        opening=np.array(openings, dtype=np.int64),
+        source=np.array(sources, dtype=np.int8),
+        **scores,
         meta=np.array(json.dumps(meta)),
     )
     return len(rows)

@@ -67,5 +67,14 @@ indices; applying one to `own` and `opp` is a free augmentation at training time
 ±32767 forced), `static` (int16, nokamute's hand tuned evaluation of the same position,
 the baseline a learned evaluation has to beat), `outcome` (int8, +1/0/-1 for the side to
 move), `ply` (int16), `game` (int32), `random` (bool, an epsilon random move was played
-from this position) and `meta` (JSON: version, radius, levels, num_features, bug order,
-source file).
+from this position), `opening` (int64, hash of the game's first 4 moves), `source` (int8,
+the depth the game was played at, 0 if not recorded) and `meta` (JSON: version, radius,
+levels, num_features, bug order, source file, depths).
+
+Version 3 adds, for relabeled games (`hive-label --relabel`), one int16 array per searched
+depth: `score3`, `score4`, `score5`. These labels are a function of the position only: a
+fresh engine (one thread, 16 MiB table, root moves in an order seeded by the position)
+searches each position at each depth, so the same position always gets the same score.
+The trainer's `target` picks one depth (`"d5"`) or the mean of several in win probability
+space (`"d45"`); holding out by `opening` keeps the depth 4 and depth 5 games that share an
+opening (same seeds) on the same side of the split.

@@ -152,9 +152,13 @@ class Engine:
         """Search with the spec's limit and return the chosen move."""
         return self.cmd(f"bestmove {self.spec.limit_args()}")[0]
 
-    def search(self) -> tuple[str, int | None, int]:
-        """Nokamute extension: (move, root score for the side to move, pv length)."""
-        move, score, pvlen = self.cmd(f"search {self.spec.limit_args()}")[0].split(";")
+    def search(self, depth: int | None = None) -> tuple[str, int | None, int]:
+        """Nokamute extension: (move, root score for the side to move, pv length).
+
+        `depth` overrides the spec's limit for this search.
+        """
+        limit = f"depth {depth}" if depth is not None else self.spec.limit_args()
+        move, score, pvlen = self.cmd(f"search {limit}")[0].split(";")
         return move, (int(score) if score else None), int(pvlen)
 
     def eval(self) -> int:

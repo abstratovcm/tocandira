@@ -140,3 +140,40 @@ def test_encode_dataset(tmp_path):
     assert data["own"].max() < geometry(6).num_features
     meta = json.loads(str(data["meta"]))
     assert meta["radius"] == 6 and meta["num_features"] == 8128
+
+
+def test_encode_relabeled_games(tmp_path):
+    # Per depth scores follow their own position even when a record lists plies out of
+    # order, and games sharing an opening share its key (they are held out together).
+    moves = [*OPENING, "wA2 \\wQ", "bA1 /wQ"]
+
+    def pos(ply: int, s3: int, s5: int | None) -> dict:
+        return {
+            "ply": ply,
+            "score": 0,
+            "static": 0,
+            "outcome": 0,
+            "random": False,
+            "scores": {"3": s3, "5": s5},
+        }
+
+    games = [
+        {"id": 1, "game_type": "Base+MLP", "moves": moves, "depth": 4,
+         "positions": [pos(5, 50, 55), pos(4, 40, None)]},
+        {"id": 2, "game_type": "Base+MLP", "moves": moves[:5], "depth": 5,
+         "positions": [pos(4, 41, 46)]},
+        {"id": 3, "game_type": "Base+MLP", "moves": [*OPENING[:3], "bA1 bQ/"],
+         "positions": [pos(3, 30, 35)]},
+    ]  # fmt: skip
+    labels = tmp_path / "labels.jsonl"
+    labels.write_text("".join(json.dumps(g) + "\n" for g in games))
+    out = tmp_path / "labels.npz"
+    encode_dataset(str(labels), str(out), radius=6)
+    data = np.load(out)
+    assert json.loads(str(data["meta"]))["depths"] == [3, 5]
+    assert data["ply"].tolist() == [4, 5, 4, 3]
+    assert data["score3"].tolist() == [40, 50, 41, 30]
+    assert data["score5"].tolist() == [0, 55, 46, 35]
+    assert data["source"].tolist() == [4, 4, 5, 0]
+    opening = data["opening"].tolist()
+    assert opening[0] == opening[1] == opening[2] != opening[3]

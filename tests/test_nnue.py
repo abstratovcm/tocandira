@@ -6,7 +6,15 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from tocandira.encode import geometry  # noqa: E402
-from tocandira.nnue import Config, Nnue, load_shards, split_by_game, sweep, train  # noqa: E402
+from tocandira.nnue import (  # noqa: E402
+    Config,
+    Nnue,
+    load_shards,
+    split_by_game,
+    sweep,
+    target_score,
+    train,
+)
 
 RADIUS = 6
 NUM_FEATURES = geometry(RADIUS).num_features
@@ -78,6 +86,35 @@ def test_load_shards_skips_a_copy_of_a_shard(tmp_path):
     merged, meta = load_shards([str(p) for p in tmp_path.iterdir()])
     assert len(merged["score"]) == 100
     assert (meta["shards"], meta["duplicates"]) == (1, 1)
+
+
+def test_load_shards_carries_relabeled_arrays_and_rejects_a_mix(tmp_path):
+    v3 = {**_synthetic(100, seed=1), "opening": np.arange(100, dtype=np.int64)}
+    v3["score5"] = v3["score"] + 1
+    _save(tmp_path / "a.npz", v3)
+    _save(tmp_path / "b.npz", {**v3, "score5": v3["score"] + 2})
+    merged, _ = load_shards([str(tmp_path / "a.npz"), str(tmp_path / "b.npz")])
+    assert merged["score5"].tolist() == (v3["score"] + 1).tolist() + (v3["score"] + 2).tolist()
+    assert len(merged["opening"]) == 200
+    _save(tmp_path / "v2.npz", _synthetic(100, seed=2))
+    with pytest.raises(ValueError, match="arrays"):
+        load_shards([str(tmp_path / "a.npz"), str(tmp_path / "v2.npz")])
+
+
+def test_target_score_averages_depths_in_win_probability():
+    data = {
+        "score": np.array([7, 0, 0], dtype=np.int16),
+        "score4": np.array([100, 400, 32767], dtype=np.int16),
+        "score5": np.array([100, -400, 32767], dtype=np.int16),
+    }
+    assert target_score(data, "score").tolist() == [7, 0, 0]
+    d45 = target_score(data, "d45")
+    assert d45[0] == pytest.approx(100, abs=0.01)  # equal depths: the score itself
+    assert d45[1] == pytest.approx(0, abs=0.01)  # symmetric: an even game
+    assert d45[2] == pytest.approx(3000, abs=0.5)  # forced wins count as decisive (CLAMP)
+    assert target_score(data, "d5").tolist() == pytest.approx([100, -400, 3000], abs=0.5)
+    with pytest.raises(ValueError):
+        target_score(data, "deep")
 
 
 @pytest.mark.slow
