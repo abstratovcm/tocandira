@@ -21,8 +21,11 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NOKAMUTE = os.environ.get("TOCANDIRA_ENGINE") or os.path.join(
     REPO_ROOT, "engine", "nokamute", "target", "release", "nokamute"
 )
-# Frozen reference opponent, built by scripts/build_reference.sh. Spec shorthand: cmd=ref
-REFERENCE = os.path.join(REPO_ROOT, "reference", "nokamute-1.0.3")
+# Frozen reference opponent, built by scripts/build_reference.sh. Spec shorthand: cmd=ref;
+# TOCANDIRA_REFERENCE overrides the path.
+REFERENCE = os.environ.get("TOCANDIRA_REFERENCE") or os.path.join(
+    REPO_ROOT, "reference", "nokamute-1.0.3"
+)
 
 
 class UhpError(RuntimeError):
