@@ -24,12 +24,19 @@ Microbenchmark of one evaluation on a mid game position, Ryzen 7 5700G:
 | int16 accumulators, int8 layer weights (scalar) | 3.5 µs | 9x |
 | **AVX2 (16 lane adds, u8 x i8 multiply-add pairs), runtime detected** | **1.57 µs** | 4.2x |
 | same at hidden 128 | 1.13 µs | 3.0x |
+| **accumulators kept in the board, updated on every piece insert/remove and hand change** | **0.52 µs** | 1.5x |
+| same at hidden 128 | 0.42 µs | 1.2x |
+
+Keeping the accumulators in step costs 164 ns per apply+undo pair (168 → 332 ns). A queen
+appearing or leaving refreshes both perspectives from scratch (the anchors move). The
+board's accumulators are checked against a from scratch evaluation after every move of
+random games with undos (Rust test) and against the numpy reference over UHP (Python test).
 
 A table small enough for L2 was no faster, so the cost is arithmetic, not memory. The
 quantization (127 per unit for accumulators, 64 for layer weights, output layer in f32)
 is mirrored in numpy (`tocandira.weights.evaluate_quantized`) and the engine matches it
 exactly on random games; the deviation from the f32 net stays under 2% of a logit.
-Not done yet: incremental accumulators (would remove the 44 row adds per perspective).
+
 
 ## 2026-10-14: equal time, and what a ply is worth
 
