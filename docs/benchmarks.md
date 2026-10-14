@@ -2,6 +2,54 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-14: the depth 5 nets in play, and a holdout leak
+
+Colab v6e-1 (44 vCPUs, 22 games in parallel on the clock), 800 games unless noted:
+
+| match | score | Elo |
+|---|---|---|
+| g/d5-r6-lam1-h256 vs nokamute 1.0.3, 1 s/move | 45.8% [42.3, 49.2] | −30 [−54, −5] |
+| g/d5-r6-lam1-h128 vs nokamute 1.0.3, 1 s/move | 52.0% [48.5, 55.4] | +14 [−10, +38] |
+| g/d5-r6-lam1-h256 vs net c, 1 s/move (400) | 44.5% [39.7, 49.4] | −38 [−73, −4] |
+| g/d5-r6-lam1-h256 vs fork, 1 s/move | 51.3% [47.9, 54.8] | +9 [−15, +33] |
+| g/d5-r6-lam1-h256 vs fork, depth 5 (400) | 50.6% [45.7, 55.5] | +4 [−30, +38] |
+
+The depth 5 nets are weaker than net c: per node at depth 5 they gain +4 where c gains
++35, and at equal time they lose to c. Net c's +34 over 1.0.3 is unaffected (its data has
+no duplicates; every depth 4 run validated on the same 87,620 positions).
+
+**The leak.** `data/d5r6` on Drive held every shard twice (`shard-NNN.npz` and a byte
+identical `shard-NNN(1).npz`): both training sessions found radius 6 missing and encoded
+it into the same folder at once. `load_shards` gave each copy its own game ids, so held
+out games had twins in the training set. Evidence: the radius 6 runs validated on 93,736
+decided positions, the 30 unique shards give 65,068, exactly the radius 8 run's count (its
+folder had no copies). The previous entry's 0.731 / 0.729 / 0.722 are therefore
+contaminated, and so are "width 128 matches 256" and "still improving at the cap"; the
+clean depth 5 figure is radius 8's 0.698. `load_shards` now skips files whose bytes it has
+already loaded.
+
+**Why the nets play worse, beyond the leak.** Cross evaluation (numpy, radius 6, Pearson
+against each holdout's clamped search score):
+
+| net | depth 4 holdout | depth 5 holdout (leaky for the d5 nets) |
+|---|---|---|
+| static eval | 0.324 | 0.265 |
+| c (depth 4 data) | **0.662** | 0.637 |
+| g256 (depth 5 data) | 0.623 | 0.770 |
+| g128 (depth 5 data) | 0.624 | 0.757 |
+
+On depth 4 games, which look like match games, c is better. Depth 5 self play differs
+from what a match reaches: median ply 28 against 43, and 9% of positions past ply 70
+against 31%. Its labels also favour the side to move: mean clamped score +111 against +2
+at depth 4 (an odd depth effect), and the nets learned an offset of about +70 and a wider
+output (std 334 against 211 for c). Each net had been validated only on its own source's
+games, which hid all of this.
+
+Next: label every position at several depths instead of choosing positions by depth. The
+d4 and d5 games share their openings (same seeds), so re-searching both sets at depths 3,
+4 and 5 gives one dataset where the target (depth 5, the mean of 4 and 5, ...) is a
+training choice and every net is compared on the same holdout.
+
 ## 2026-10-14: 800 game matches (Colab v5e-1, fair worker count) and the depth 5 nets
 
 Net c (`c/r6-lam1-h256`, incremental engine), 800 games each, one game per two vCPUs on the
@@ -31,6 +79,9 @@ still improving at the cap):
 
 Width 128 matches 256 again and evaluates in 0.42 µs instead of 0.52. Next: these two nets
 in the same matches.
+
+Correction (next entry): the three radius 6 rows were measured on a holdout with copies of
+its games in training; only radius 8 (0.698) is clean.
 
 ## 2026-10-14: depth 5 dataset
 

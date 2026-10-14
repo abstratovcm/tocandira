@@ -59,16 +59,25 @@ def test_split_holds_out_whole_games():
 
 
 def test_load_shards_keeps_game_ids_unique_and_checks_radius(tmp_path):
-    data = _synthetic(100, seed=1)
     for i in range(2):
-        _save(tmp_path / f"shard{i}.npz", data)
+        _save(tmp_path / f"shard{i}.npz", _synthetic(100, seed=i))
     merged, meta = load_shards([str(tmp_path / "shard0.npz"), str(tmp_path / "shard1.npz")])
     assert len(merged["score"]) == 200
     assert len(np.unique(merged["game"])) == 4
-    assert meta == {"radius": RADIUS, "num_features": NUM_FEATURES, "shards": 2}
-    _save(tmp_path / "other.npz", data, {"radius": 12, "num_features": 30016})
+    assert meta == {"radius": RADIUS, "num_features": NUM_FEATURES, "shards": 2, "duplicates": 0}
+    _save(tmp_path / "other.npz", _synthetic(100, seed=1), {"radius": 12, "num_features": 30016})
     with pytest.raises(ValueError, match="radius"):
         load_shards([str(tmp_path / "shard0.npz"), str(tmp_path / "other.npz")])
+
+
+def test_load_shards_skips_a_copy_of_a_shard(tmp_path):
+    # Two Colab sessions encoded the same shards into one Drive folder (`shard-000.npz` and
+    # `shard-000(1).npz`); with their own game ids the copies leaked into the holdout.
+    _save(tmp_path / "shard-000.npz", _synthetic(100, seed=1))
+    (tmp_path / "shard-000(1).npz").write_bytes((tmp_path / "shard-000.npz").read_bytes())
+    merged, meta = load_shards([str(p) for p in tmp_path.iterdir()])
+    assert len(merged["score"]) == 100
+    assert (meta["shards"], meta["duplicates"]) == (1, 1)
 
 
 @pytest.mark.slow

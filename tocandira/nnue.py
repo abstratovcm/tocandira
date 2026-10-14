@@ -16,6 +16,7 @@ held out games every epoch, the best checkpoint kept, early stopping on patience
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -39,10 +40,24 @@ Meta = dict[str, Any]
 
 
 def load_shards(paths: list[str]) -> tuple[Data, Meta]:
-    """Concatenate npz shards of one radius; game ids are offset per shard so they stay unique."""
+    """Concatenate npz shards of one radius; game ids are offset per shard so they stay unique.
+
+    A file whose bytes were already loaded is skipped and counted in `meta["duplicates"]`:
+    two sessions encoding into one Drive folder leave identical copies, and with their own
+    game ids a held out game's copy would land in the training set.
+    """
     parts: dict[str, list[npt.NDArray[Any]]] = {k: [] for k in ARRAYS}
     meta: Meta = {}
-    for i, path in enumerate(sorted(paths)):
+    seen: set[str] = set()
+    duplicates = 0
+    for path in sorted(paths):
+        with open(path, "rb") as f:
+            digest = hashlib.sha1(f.read()).hexdigest()
+        if digest in seen:
+            duplicates += 1
+            continue
+        seen.add(digest)
+        i = len(seen) - 1
         with np.load(path) as d:
             m = json.loads(str(d["meta"]))
             if meta and m["radius"] != meta["radius"]:
@@ -51,6 +66,7 @@ def load_shards(paths: list[str]) -> tuple[Data, Meta]:
             for k in ARRAYS:
                 arr = d[k].astype(np.int64) + i * 10_000_000 if k == "game" else d[k]
                 parts[k].append(arr)
+    meta["duplicates"] = duplicates
     return {k: np.concatenate(v) for k, v in parts.items()}, meta
 
 
