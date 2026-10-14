@@ -2,6 +2,27 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-14: round 3 sweeps, radius and target (Colab, L4)
+
+Same 2.3M positions, same 5% held out games, new trainer (AdamW, weight decay 1e-4, lr
+1e-3 decaying 0.9 per epoch, best epoch kept, patience 3). Pearson is against the depth 4
+score and is comparable across targets; loss is not (the target changes with lambda).
+
+| run | radius | lambda | best epoch | loss | Pearson |
+|---|---|---|---|---|---|
+| static eval | | | | | 0.324 |
+| a/r12-h256 | 12 | 0.75 | 3 of 6 | 0.0170 | 0.571 |
+| a/r8-h256 | 8 | 0.75 | 3 of 6 | 0.0169 | 0.578 |
+| a/r6-h256 | 6 | 0.75 | 3 of 6 | 0.0167 | 0.579 |
+| b/lam1.0 | 12 | 1.0 | 12 of 15 | 0.0063 | **0.644** |
+| b/lam0.5 | 12 | 0.5 | 1 of 4 | 0.0500 | 0.435 |
+| b/wd1e-3 | 12 | 0.75, wd 1e-3 | 2 of 5 | 0.0171 | 0.562 |
+
+Radius 6 is as good as 12 with 3.7x fewer features (8,128). The game outcome in the target
+is what makes the nets overfit: lambda 0.5 peaks at epoch 1, lambda 1.0 (pure search score,
+the Stockfish pretraining setting) keeps improving for 12 epochs and reaches Pearson 0.64.
+Extra weight decay does nothing. Decision for the engine: radius 6, lambda 1.0.
+
 ## 2026-10-14: first full run, 2.3M positions (Colab)
 
 Data: 30 shards, 30,000 games, 2,310,987 positions at depth 4 (round 1 on two TPU v5e-1
