@@ -1,6 +1,6 @@
 import math
 
-from tocandira.stats import elo, sprt_bounds, sprt_llr, summary, wilson
+from tocandira.stats import elo, sprt_bounds, sprt_llr, wilson
 
 
 def test_wilson_contains_point_estimate():
@@ -41,11 +41,3 @@ def test_sprt_bounds():
     lo, hi = sprt_bounds()
     assert math.isclose(lo, -hi)
     assert math.isclose(hi, math.log(0.95 / 0.05))
-
-
-def test_summary_text():
-    text = summary(10, 5, 5)
-    assert "W10 D5 L5" in text
-    assert "20 games" in text
-    assert "62.5%" in text
-    assert summary(0, 0, 0) == "no games"

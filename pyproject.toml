@@ -5,11 +5,12 @@ description = "Hive engine lab: tournament harness, position labeling and a lear
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["numpy>=2"]
 
 [project.scripts]
 hive-tournament = "tocandira.tournament:main"
 hive-label = "tocandira.label:main"
+hive-encode = "tocandira.encode:main"
 
 [dependency-groups]
 dev = ["ruff>=0.9", "mypy>=1.14", "pytest>=8"]
@@ -51,3 +52,4 @@ files = ["tocandira"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["slow: plays games, encodes datasets or trains; run with -m slow or in CI"]
