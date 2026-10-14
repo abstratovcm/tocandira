@@ -2,6 +2,16 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-14: depth 5 dataset
+
+`hive-label --depth 5`, 30 shards on two Colab sessions (v6e-1 44 vCPUs / v5e-1 24): 30,000
+games, 1,460,396 positions. Depth 5 self play is more decisive than depth 4: 49 positions per
+game (vs 77), median ply 28 (vs 43), draws and ply caps 2% (vs 20%), forced labels 9.1% (vs
+4.2%). The static eval predicts the depth 5 score with Pearson 0.275 (0.324 for depth 4).
+The depth 4 net (c) scores 0.638 on held out depth 5 games without ever seeing one, so most
+of what depth 5 knows is already in the depth 4 imitation; the training round on this data
+(sweeps g and h) measures what the rest is worth.
+
 ## 2026-10-14: Colab matches (two v5e-1, 24 vCPUs each), incremental engine
 
 | match | games | score | Elo |
