@@ -1,30 +1,28 @@
 # tocandira
 
-Hive engine: nokamute's search with a learned evaluation. Fork of
+Hive engine: nokamute's search with a learned evaluation (named after the bullet ant; in
+Hive the ant is the piece that goes anywhere). Fork of
 [nokamute](https://github.com/edre/nokamute) by Eric Roshan Eisner (MIT).
-Target: beat nokamute 1.0.3 at equal time per move. Work in progress, no results yet.
-
-Named after the bullet ant (*Paraponera clavata*, "tocandira" in Tupi). In Hive the ant is
-the piece that goes anywhere.
+Target: beat nokamute 1.0.3 at equal time per move. Status (2026-10-14): at 1 s per move
+the learned evaluation scores 60% locally and 52 to 54% on Colab against the hand tuned one
+in the same search; the margin is still being measured. See [docs/benchmarks.md](docs/benchmarks.md).
 
 ## Roadmap
 
 1. **Learned evaluation inside nokamute's search.** Label positions with the engine's own
-   search, train a small net, put it back in place of `eval.rs`. The open question: does it
-   beat the hand tuned evaluation at equal time per move? Nobody has shown a neural Hive
-   engine that does.
+   search, train a small net, put it back in place of `eval.rs`. Does it beat the hand
+   tuned evaluation at equal time per move? Nobody had shown a neural Hive engine that does.
 2. If 1 works: **own search**, tuned for the learned evaluation (replaces the generic
    `minimax` crate nokamute uses).
 3. If needed: **own board representation**, when incremental net updates ask for it.
 
-Until step 2, every strength claim reads "nokamute's search with the tocandira evaluation
-vs nokamute 1.0.3". Speed and move generation are nokamute's, not ours.
+Until step 2, every claim reads "nokamute's search with the tocandira evaluation vs
+nokamute"; speed and move generation are nokamute's, not ours.
 
 ## Layout
 
-- `engine/nokamute/`: the engine fork (submodule, branch `tocandira`), with a `search` UHP
-  command that returns the root score (sent upstream as
-  [edre/nokamute#13](https://github.com/edre/nokamute/pull/13)).
+- `engine/nokamute/`: the engine fork (submodule, branch `tocandira`): the `search` UHP
+  command ([edre/nokamute#13](https://github.com/edre/nokamute/pull/13)) and `--nnue`.
 - `tocandira/`: Python lab (numpy is the only runtime dependency).
   - `hive-tournament`: engine vs engine matches over UHP, parallel games, paired random
     openings with colours swapped, Wilson interval, Elo, optional SPRT early stop.
@@ -62,8 +60,8 @@ uv run hive-encode runs/labels-<stamp>.jsonl                              # -> r
 
 Player spec: `depth=N` or `seconds=S`; `cmd=/path/to/uhp/engine` or `cmd=ref`; `name=...`;
 any other `Key=Value` is sent as a UHP option (`Aggression`, `TableSizeMiB`, ...). All
-match numbers are from A's point of view. Fixed depth comparisons are for development
-only: a learned evaluation costs more per node, so the claim that counts is at equal time.
+match numbers are from A's point of view. Fixed depth is for development; the claim that
+counts is at equal time, since a learned evaluation costs more per node.
 
 Labels: one JSON object per game with the move list and, per position, the root score at
 the search depth (side to move's view), best and played move, and the final outcome.

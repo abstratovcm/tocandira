@@ -2,6 +2,36 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-14: Colab matches (two v5e-1, 24 vCPUs each), incremental engine
+
+| match | games | score | Elo |
+|---|---|---|---|
+| net vs 1.0.3, 1 s/move | 400 | 51.5% [46.6, 56.4] | +10 [−24, +44] |
+| net vs fork, 1 s/move | 400 | 53.8% [48.9, 58.6] | +26 [−8, +60] |
+| net vs fork, 3 s/move | 200 | 51.7% [44.9, 58.6] | +12 [−36, +60] |
+| net vs fork, depth 5 | 200 | 48.0% [41.2, 54.9] | −14 [−62, +34] |
+
+Two caveats. The time controlled matches ran one game per vCPU (24 workers on 24
+hyperthreads), so the two engines of a game shared a core with another game's engines; the
+net's AVX2 evaluation is the kind of load that suffers most from a busy sibling thread, which
+biases these numbers against it relative to the local run (+70 at 7 games on 8 cores). The
+notebook now defaults to one game per two vCPUs for time controlled matches. Second, the
+depth 5 result is a tie where depth 4 gave +63 and +83; with 200 games its interval still
+reaches +34, so the honest reading is "the per node edge shrinks with depth, by an amount
+not yet measured". Both need bigger, cleaner samples: fixed depth matches are exact and
+cheap on Colab (800 games of depth 4 and 5), time controlled ones with the corrected worker
+count.
+
+## 2026-10-14: equal time with the incremental engine: the net wins
+
+`hive-tournament --a "cmd=<fork> --nnue c/r6-lam1-h256/weights.bin,seconds=1" --b
+"cmd=<fork>,seconds=1" --games 400 --workers 7`, one evaluation at 0.52 µs.
+
+**60.0% [55.1, 64.7], about +70 Elo [+36, +105]**, W230 D20 L150, 47 plies per game, 38 min.
+As white 68%, as black 52%. Same code and rules on both sides; the evaluator is the only
+difference. The three equal time matches of the day, same net: f32 forward pass −144,
+quantized AVX2 −28, incremental accumulators +70.
+
 ## 2026-10-14: equal time with the quantized net
 
 `hive-tournament --a "cmd=<fork> --nnue c/r6-lam1-h256/weights.bin,seconds=1" --b
