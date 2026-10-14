@@ -1,0 +1,4 @@
+[submodule "engine/nokamute"]
+	path = engine/nokamute
+	url = https://github.com/abstratovcm/nokamute.git
+	branch = tocandira
