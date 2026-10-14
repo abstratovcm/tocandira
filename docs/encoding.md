@@ -31,14 +31,33 @@ else (0, 0). Each piece on the board yields one feature:
 - `bug`: index into `QABGSMLP`.
 - `level`: stack height bucket 0, 1, 2, 3+.
 
-469 × 2 × 8 × 4 = 30,016 possible features, at most 28 active (one per piece in Base+MLP).
-A position is encoded from both perspectives: `own` (side to move) and `opp`, plus 16
-pieces in hand counts (side to move's 8 bugs first).
+The radius is a parameter (`hive-encode --radius`, `tocandira.encode.geometry(r)`):
+
+| radius | cells | features | pieces covered (round 2 data) |
+|---|---|---|---|
+| 6 | 127 | 8,128 | 93.6% |
+| 8 | 217 | 13,888 | 99.0% |
+| 12 | 469 | 30,016 | 99.9% |
+
+At radius 12 only 9,365 features ever fired in 2.3M positions. At most 28 features are
+active per perspective (one per piece in Base+MLP). A position is encoded from both
+perspectives: `own` (side to move) and `opp`, plus 16 pieces in hand counts (side to
+move's 8 bugs first).
+
+## Possible next inputs
+
+What strong players attend to, per Ingersoll's *Play Hive Like a Champion* (three keys:
+mobility, tempo, strength; formations gate, door, ring, elbow, pocket; tactics pin, cover,
+block, fill, bug counting) and the KTH strategy comparison (defensive circling beats a
+naive attack): counts of movable bugs per side, pinned bugs, free hexes around each queen,
+placeable hexes per side, a beetle on or next to a queen. The queen relative features see
+the geometry of these; mobility needs move generation, so these would be a few dense
+scalars emitted by the engine at labeling time, an experiment arm after the first match.
 
 ## Symmetries
 
 Hive is invariant under the 12 symmetries of the hexagon about the anchor (6 rotations,
-6 reflections). `tocandira.encode.d6_tables()` gives 12 permutations of the feature
+6 reflections). `tocandira.encode.geometry(r).d6_tables()` gives 12 permutations of the feature
 indices; applying one to `own` and `opp` is a free augmentation at training time.
 
 ## Dataset layout
