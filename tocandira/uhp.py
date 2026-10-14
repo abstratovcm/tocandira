@@ -61,13 +61,18 @@ class PlayerSpec:
         if not spec.name:
             limit = f"d{spec.depth}" if spec.depth is not None else f"{spec.seconds}s"
             extra = ",".join(f"{k}={v}" for k, v in spec.options.items() if k != "NumThreads")
-            spec.name = os.path.basename(spec.cmd) + " " + limit + (" " + extra if extra else "")
+            spec.name = spec.binary + " " + limit + (" " + extra if extra else "")
         return spec
+
+    @property
+    def binary(self) -> str:
+        """The executable's name, without its directory or arguments such as `--nnue`."""
+        return os.path.basename(self.cmd.split()[0])
 
     @property
     def is_nokamute(self) -> bool:
         """Whether the engine understands nokamute's unofficial commands (`seconds`, `search`)."""
-        return os.path.basename(self.cmd).startswith("nokamute")
+        return self.binary.startswith("nokamute")
 
     def limit_args(self) -> str:
         """Argument string for `bestmove` / `search`."""

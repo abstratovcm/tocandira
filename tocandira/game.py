@@ -38,7 +38,9 @@ class GameRecord:
     game_type: str
     opening: list[str]
     moves: list[str]  # full move list, opening included
-    result: str  # WhiteWins | BlackWins | Draw | ForfeitWhite | ForfeitBlack | PlyCap
+    # WhiteWins | BlackWins | Draw | ForfeitWhite | ForfeitBlack | PlyCap | Disagree
+    # (Disagree: the two engines differ on whether the game ended, e.g. repetition rules).
+    result: str
     plies: int
     white_time: float
     black_time: float
@@ -89,8 +91,12 @@ def play_game(
                 result = "ForfeitWhite" if side == 0 else "ForfeitBlack"
                 error = str(exc)
                 break
-            engines[side].play(move)
+            own_state = game_state(engines[side].play(move))
             moves.append(move)
+            if own_state != state:
+                result = "Disagree"
+                error = f"after {move}: mover says {own_state}, opponent says {state}"
+                break
         else:
             if state not in ONGOING:
                 result = state

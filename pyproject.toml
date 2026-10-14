@@ -11,6 +11,7 @@ dependencies = ["numpy>=2"]
 hive-tournament = "tocandira.tournament:main"
 hive-label = "tocandira.label:main"
 hive-encode = "tocandira.encode:main"
+hive-export = "tocandira.weights:main"
 
 [dependency-groups]
 dev = ["ruff>=0.9", "mypy>=1.14", "pytest>=8"]

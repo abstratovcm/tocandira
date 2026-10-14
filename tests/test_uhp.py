@@ -40,3 +40,10 @@ def test_parse_requires_a_limit():
 
 def test_explicit_name_wins():
     assert PlayerSpec.parse("depth=1,name=foo").name == "foo"
+
+
+def test_engine_arguments_do_not_hide_the_binary():
+    spec = PlayerSpec.parse("cmd=/x/nokamute --nnue /y/weights.bin,seconds=1")
+    assert spec.is_nokamute
+    assert spec.name == "nokamute 1.0s"
+    assert spec.limit_args() == "seconds 1"

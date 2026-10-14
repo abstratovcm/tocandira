@@ -2,6 +2,40 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-14: first match, equal depth
+
+`hive-tournament --a "cmd=<fork> --nnue a/r6-h256/weights.bin,depth=4" --b cmd=ref,depth=4
+--games 200 --workers 7` (the sweep a net: radius 6, lambda 0.75, Pearson 0.579).
+
+**Net 60.8% [53.8, 67.3], about +76 Elo [+27, +125] over nokamute 1.0.3 at depth 4**,
+W107 D29 L64, 336 s of wall clock. As white 68%, as black 54%. The net side took 10.2 s of
+search per game, the hand eval 1.0 s (the ~10x per node cost). One game was a rules version
+disagreement: the fork declared a repetition draw (the post 1.0.3 six ply cycle fix) where
+1.0.3 played on; the harness now records such games as `Disagree`, scored as a draw.
+
+Same match with the sweep c net (radius 6, lambda 1.0, Pearson 0.662): **61.8% [54.9, 68.2],
+about +83 Elo [+34, +133]**, W105 D37 L58, 321 s.
+
+This is the per node answer: the learned evaluation beats the hand tuned one when both
+search the same tree. Equal time is the next test.
+
+## 2026-10-14: sweeps c and d, the recipe combined (Colab, L4)
+
+Radius 6, lambda 1.0, patience 5, same data and holdout.
+
+| run | hidden | best epoch | Pearson |
+|---|---|---|---|
+| static eval | | | 0.324 |
+| c/r6-lam1-h256 | 256 | 12 of 17 | **0.662** |
+| d/r6-lam1-h512 | 512 | 10 of 15 | 0.659 |
+
+The engine candidate is `c/r6-lam1-h256` (8,128 x 256 table, 8.4 MB as `weights.bin`).
+
+Cost in the engine (`--nnue`, forward pass from scratch per node, no quantization): a mid
+game `bestmove` takes 0.35 s at depth 4 and 1.7 s at depth 5 with the net vs 0.03 s and
+0.40 s with the hand eval, about 10x per node. Equal time therefore means about one ply less
+for the net.
+
 ## 2026-10-14: round 3 sweeps, radius and target (Colab, L4)
 
 Same 2.3M positions, same 5% held out games, new trainer (AdamW, weight decay 1e-4, lr
