@@ -2,6 +2,36 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-14: 800 game matches (Colab v5e-1, fair worker count) and the depth 5 nets
+
+Net c (`c/r6-lam1-h256`, incremental engine), 800 games each, one game per two vCPUs on the
+clock:
+
+| match | score | Elo |
+|---|---|---|
+| vs fork, depth 4 | 60.4% [57.0, 63.8] | +74 [+49, +98] |
+| vs fork, depth 5 | 55.1% [51.6, 58.5] | +35 [+11, +59] |
+| vs fork, 1 s/move | 52.7% [49.2, 56.1] | +19 [−5, +43] |
+| **vs nokamute 1.0.3, 1 s/move** | **54.8% [51.3, 58.2]** | **+34 [+9, +58]** |
+
+The per node edge is real at both depths and shrinks with depth (the net imitates a depth 4
+search). At equal time the net is ahead of 1.0.3 with an interval that excludes zero, and
+about level with the current code. Roadmap item 1 holds, by a modest margin.
+
+Depth 5 data, sweeps g and h (radius 6 unless noted, lambda 1.0, 30 epochs max; all were
+still improving at the cap):
+
+| run | hidden | Pearson vs depth 5 score |
+|---|---|---|
+| static eval | | 0.272 |
+| g/d5-r6-lam1-h256 | 256 | **0.731** |
+| g/d5-r6-lam1-h128 | 128 | 0.729 |
+| h/d5-r8-lam1-h256 (radius 8) | 256 | 0.698 |
+| h/d5-r6-lam1-h256-lr5e-4 | 256 | 0.722 |
+
+Width 128 matches 256 again and evaluates in 0.42 µs instead of 0.52. Next: these two nets
+in the same matches.
+
 ## 2026-10-14: depth 5 dataset
 
 `hive-label --depth 5`, 30 shards on two Colab sessions (v6e-1 44 vCPUs / v5e-1 24): 30,000
