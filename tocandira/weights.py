@@ -16,6 +16,7 @@ import os
 import struct
 import sys
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -116,6 +117,45 @@ def evaluate(w: Weights, own: list[int], opp: list[int], hand: list[int]) -> flo
     x = np.clip(a["l1_w"] @ x + a["l1_b"], 0, 1)
     x = np.clip(a["l2_w"] @ x + a["l2_b"], 0, 1)
     return float((a["out_w"] @ x + a["out_b"][0]) * w.scale)
+
+
+ACT_SCALE = 127
+WEIGHT_SCALE = 64
+WEIGHT_SHIFT = 6
+
+
+def evaluate_quantized(w: Weights, own: list[int], opp: list[int], hand: list[int]) -> float:
+    """What the engine computes: int16 accumulators, int8 layer weights, same rounding.
+
+    Rows and biases carry ACT_SCALE per unit, layer weights WEIGHT_SCALE per unit; activations
+    are clipped to 0..127 and layer sums shifted back by WEIGHT_SHIFT. The output layer is f32.
+    """
+    a = w.arrays
+
+    def q16(x: npt.NDArray[Any], s: float) -> npt.NDArray[np.int32]:
+        return np.clip(np.rint(x.astype(np.float64) * s), -32767, 32767).astype(np.int32)
+
+    def q8(x: npt.NDArray[Any], s: float) -> npt.NDArray[np.int32]:
+        return np.clip(np.rint(x.astype(np.float64) * s), -127, 127).astype(np.int32)
+
+    ft, hand_w, hand_b = q16(a["ft"], ACT_SCALE), a["hand_w"], q16(a["hand_b"], ACT_SCALE)
+    counts = np.asarray(hand, dtype=np.int64)
+    swapped = np.concatenate([counts[8:], counts[:8]])
+
+    def acc(features: list[int], hand_vec: npt.NDArray[np.int64]) -> npt.NDArray[np.int32]:
+        total = hand_b.copy()
+        for f in features:
+            total = total + ft[f]
+        for slot in range(16):
+            total = total + q16(hand_w[:, slot] * min(int(hand_vec[slot]), 3), ACT_SCALE)
+        return np.clip(total, 0, ACT_SCALE)
+
+    x = np.concatenate([acc(own, counts), acc(opp, swapped)])
+    l1 = q8(a["l1_w"], WEIGHT_SCALE) @ x + q16(a["l1_b"], ACT_SCALE * WEIGHT_SCALE)
+    x = np.clip(l1 >> WEIGHT_SHIFT, 0, ACT_SCALE)
+    l2 = q8(a["l2_w"], WEIGHT_SCALE) @ x + q16(a["l2_b"], ACT_SCALE * WEIGHT_SCALE)
+    y = np.clip(l2 >> WEIGHT_SHIFT, 0, ACT_SCALE).astype(np.float32) / ACT_SCALE
+    return float((a["out_w"] @ y + a["out_b"][0]) * w.scale)
 
 
 def main(argv: list[str] | None = None) -> int:

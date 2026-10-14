@@ -2,6 +2,43 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-14: making the net cheap (fork, `benches/nnue.rs`, radius 6, hidden 256)
+
+Microbenchmark of one evaluation on a mid game position, Ryzen 7 5700G:
+
+| step | per eval | vs hand eval (373 ns) |
+|---|---|---|
+| first version: f32, allocations, plain sums | 13.3 µs | 36x |
+| no allocations, hand counts as precomputed rows, lane chunked sums | 4.3 µs | 11x |
+| int16 accumulators, int8 layer weights (scalar) | 3.5 µs | 9x |
+| **AVX2 (16 lane adds, u8 x i8 multiply-add pairs), runtime detected** | **1.57 µs** | 4.2x |
+| same at hidden 128 | 1.13 µs | 3.0x |
+
+A table small enough for L2 was no faster, so the cost is arithmetic, not memory. The
+quantization (127 per unit for accumulators, 64 for layer weights, output layer in f32)
+is mirrored in numpy (`tocandira.weights.evaluate_quantized`) and the engine matches it
+exactly on random games; the deviation from the f32 net stays under 2% of a logit.
+Not done yet: incremental accumulators (would remove the 44 row adds per perspective).
+
+## 2026-10-14: equal time, and what a ply is worth
+
+All with the sweep c net (`c/r6-lam1-h256`) and the fork; 200 games unless noted.
+
+| match | score | Elo |
+|---|---|---|
+| fork plain vs 1.0.3, depth 4 | 53.0% [46.1, 59.8] | +21 [-27, +69] (same strength) |
+| net vs fork plain, depth 4 | 59.0% [52.1, 65.6] | **+63** [+14, +112] |
+| net vs fork plain, 1 s/move (143 games, stopped) | 30.4% [23.5, 38.4] | **−144** [−205, −82] |
+| plain depth 4 vs depth 3 | 82.8% | +272 per ply |
+| plain depth 5 vs depth 4 | 86.0% | +315 per ply |
+| net depth 3 vs plain depth 4 | 40.0% [33.5, 46.9] | −70 [−119, −21] |
+
+Reading: the learned evaluation is worth about +200 Elo at a fixed depth (a one ply
+handicap costs it 70 instead of 272), but its forward pass costs ~10x the hand eval per
+node, which is about one ply at any time control, and a ply is worth ~300. Equal time
+therefore loses until the net gets at least 4 to 5x cheaper per node. That is engineering
+(no allocations, SIMD, quantization, incremental accumulators, a smaller net), not learning.
+
 ## 2026-10-14: first match, equal depth
 
 `hive-tournament --a "cmd=<fork> --nnue a/r6-h256/weights.bin,depth=4" --b cmd=ref,depth=4

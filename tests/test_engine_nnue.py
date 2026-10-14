@@ -9,7 +9,7 @@ import pytest
 from tocandira.board import Board
 from tocandira.encode import encode, geometry
 from tocandira.uhp import NOKAMUTE, Engine, PlayerSpec, UhpError, game_state
-from tocandira.weights import Weights, evaluate, write_bin
+from tocandira.weights import Weights, evaluate, evaluate_quantized, write_bin
 
 RADIUS = 6
 pytestmark = pytest.mark.skipif(not os.path.exists(NOKAMUTE), reason="engine not built")
@@ -28,6 +28,7 @@ def test_engine_features_and_eval_match_python(tmp_path):
     write_bin(w, str(path))
     spec = PlayerSpec(cmd=f"{NOKAMUTE} --nnue {path}", depth=1)
     checked = 0
+    quantization_error = 0.0
     for seed in range(4):
         rng = random.Random(seed)
         board = Board("Base+MLP")
@@ -44,8 +45,10 @@ def test_engine_features_and_eval_match_python(tmp_path):
                 assert ints(opp_s) == sorted(enc.opp), (seed, board.ply)
                 assert ints(hand_s) == enc.hand, (seed, board.ply)
                 score = engine.eval()
-                reference = max(-20000.0, min(20000.0, evaluate(w, enc.own, enc.opp, enc.hand)))
+                reference = evaluate_quantized(w, enc.own, enc.opp, enc.hand)
                 assert abs(score - reference) <= 1, (seed, board.ply, score, reference)
+                exact = evaluate(w, enc.own, enc.opp, enc.hand)
+                quantization_error = max(quantization_error, abs(reference - exact))
                 checked += 1
                 move = rng.choice(engine.validmoves())
                 state = game_state(engine.play(move))
@@ -53,3 +56,4 @@ def test_engine_features_and_eval_match_python(tmp_path):
                 if state not in ("NotStarted", "InProgress"):
                     break
     assert checked > 100
+    assert quantization_error < 0.02 * 400  # int8/int16 inference stays within 2% of a logit
