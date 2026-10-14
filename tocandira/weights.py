@@ -62,14 +62,23 @@ def load_npz(path: str) -> Weights:
         arrays = {k: np.asarray(d[k], dtype=np.float32) for k in ORDER}
         arrays["out_w"] = arrays["out_w"].reshape(-1)
         ft = arrays["ft"]
+        # Files from before the radius was recorded: infer it from the table size.
+        radius = int(d["radius"]) if "radius" in d else _radius_for(int(ft.shape[0]))
         return Weights(
-            radius=int(d["radius"]),
-            num_features=int(d["num_features"]),
+            radius=radius,
+            num_features=int(ft.shape[0]),
             hidden=int(ft.shape[1]),
             l2=int(arrays["l1_w"].shape[0]),
             scale=float(d["scale"]),
             arrays=arrays,
         )
+
+
+def _radius_for(num_features: int) -> int:
+    for radius in range(1, 32):
+        if (3 * radius * radius + 3 * radius + 1) * 64 == num_features:
+            return radius
+    raise ValueError(f"{num_features} features is not a radius geometry")
 
 
 def write_bin(w: Weights, path: str) -> None:

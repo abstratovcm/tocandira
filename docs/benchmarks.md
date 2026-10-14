@@ -2,6 +2,17 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-14: equal time with the quantized net
+
+`hive-tournament --a "cmd=<fork> --nnue c/r6-lam1-h256/weights.bin,seconds=1" --b
+"cmd=<fork>,seconds=1" --games 400 --workers 7`, the net at 1.6 µs per evaluation.
+
+**46.0% [41.2, 50.9], about −28 Elo [−62, +6]**, W174 D20 L206 (50 plies per game, 40 min).
+As white 50%, as black 42%. From −144 with the f32 net to a statistical tie: the speed work
+bought ~115 Elo at equal time. Still short of a win; the remaining levers are the
+incremental accumulators (removes the 44 row adds per perspective), a narrower net
+(hidden 128 is 1.1 µs) and more training data.
+
 ## 2026-10-14: making the net cheap (fork, `benches/nnue.rs`, radius 6, hidden 256)
 
 Microbenchmark of one evaluation on a mid game position, Ryzen 7 5700G:
