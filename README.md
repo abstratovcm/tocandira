@@ -32,9 +32,9 @@ nokamute"; speed and move generation are nokamute's, not ours.
 - `scripts/build_reference.sh`: builds the frozen opponent, upstream `v1.0.3`, into
   `reference/nokamute-1.0.3`. Never taken from the fork.
 - `tocandira/nnue.py`: the evaluation net and its training loop (torch, `uv sync --group train`).
-- `colab/`: round 1 generates shards of labeled positions into Drive (parallel instances),
-  round 2 runs a sweep of training configs per notebook (parallel sweeps), round 3 plays
-  matches against the fork and the 1.0.3 reference (parallel match lists).
+- `colab/`: two copies per round, one per Colab session: `01_generate_instance{0,1}`
+  (labeled positions into Drive), `02_train_{a,b}` (a sweep of configs each),
+  `03_match_{a,b}` (match lists against the fork and the 1.0.3 reference).
 - `docs/`: [benchmarks](docs/benchmarks.md) (dated measurements and results),
   [encoding](docs/encoding.md) (feature design and dataset layout).
 - `runs/`: match records and datasets (gitignored).
