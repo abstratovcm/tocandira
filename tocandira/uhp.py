@@ -17,7 +17,10 @@ from dataclasses import dataclass, field
 from typing import IO
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NOKAMUTE = os.path.join(REPO_ROOT, "engine", "nokamute", "target", "release", "nokamute")
+# The engine build; TOCANDIRA_ENGINE overrides it (Colab, other checkouts).
+NOKAMUTE = os.environ.get("TOCANDIRA_ENGINE") or os.path.join(
+    REPO_ROOT, "engine", "nokamute", "target", "release", "nokamute"
+)
 # Frozen reference opponent, built by scripts/build_reference.sh. Spec shorthand: cmd=ref
 REFERENCE = os.path.join(REPO_ROOT, "reference", "nokamute-1.0.3")
 
@@ -145,6 +148,10 @@ class Engine:
         """Nokamute extension: (move, root score for the side to move, pv length)."""
         move, score, pvlen = self.cmd(f"search {self.spec.limit_args()}")[0].split(";")
         return move, (int(score) if score else None), int(pvlen)
+
+    def eval(self) -> int:
+        """Fork extension: the hand tuned static evaluation, side to move's perspective."""
+        return int(self.cmd("eval")[0])
 
     def close(self) -> None:
         """Ask the engine to exit, killing it if it does not."""

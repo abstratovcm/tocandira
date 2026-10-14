@@ -2,6 +2,14 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-13: first net vs the static baseline, 500 games only
+
+`runs/labels-d4-500-static.npz` (36,640 positions, 2,004 held out by game), `Nnue(hidden=128)`,
+12 epochs on CPU. nokamute's static eval as a predictor of its own depth 4 score: loss 0.0195,
+Pearson 0.31, sign agreement 63.9%. The net at epoch 4: loss 0.0197, Pearson 0.27, sign
+agreement 67.9%; after that it overfits (train loss 0.008, validation rising). Ties the
+hand eval with 1% of the planned data; the rest is a data problem.
+
 ## 2026-10-13: Aggression 3 vs 5 at depth 4
 
 `hive-tournament --a depth=4 --b depth=4,Aggression=5 --games 200 --workers 7`

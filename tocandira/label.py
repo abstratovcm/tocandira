@@ -3,14 +3,15 @@
     hive-label --games 1000 --depth 4 --random-move-prob 0.1
 
 One nokamute process per game plays itself from a random opening. Every position gets the
-engine's root score at the given depth (from the side to move's perspective) and the best
-move; with probability --random-move-prob a random legal move is played instead of the best
-one, for diversity (the position is still labeled with the search result). The final game
-outcome is attached to every position as well.
+engine's root score at the given depth (from the side to move's perspective), its static
+evaluation (the hand tuned baseline a learned eval must beat) and the best move; with
+probability --random-move-prob a random legal move is played instead of the best one, for
+diversity (the position is still labeled with the search result). The final game outcome
+is attached to every position as well.
 
 Output: one JSON object per game:
   {"id", "game_type", "result", "moves": [...], "positions": [
-      {"ply", "score", "best", "played", "random", "pvlen", "outcome"}]}
+      {"ply", "score", "static", "best", "played", "random", "pvlen", "outcome"}]}
 where ply is the number of moves already played (the position is reproduced by replaying
 moves[:ply]) and outcome is +1 / 0 / -1 from the side to move's perspective.
 """
@@ -53,6 +54,7 @@ def label_game(
         positions: list[dict[str, Any]] = []
         while len(moves) < ply_cap and state not in TERMINAL:
             best, score, pvlen = eng.search()
+            static = eng.eval()
             played = best
             is_random = False
             if eps and rng.random() < eps:
@@ -67,6 +69,7 @@ def label_game(
                     "played": played,
                     "random": is_random,
                     "pvlen": pvlen,
+                    "static": static,
                 }
             )
             state = game_state(eng.play(played))

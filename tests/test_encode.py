@@ -110,6 +110,7 @@ def test_encode_dataset(tmp_path):
     ]
     for p in positions:
         p["outcome"] = 1 if p["ply"] % 2 == 0 else -1
+        p["static"] = p["ply"] * 10
     game = {
         "id": 7,
         "game_type": "Base+MLP",
@@ -130,6 +131,7 @@ def test_encode_dataset(tmp_path):
     assert data["ply"].tolist() == [2, 3, 4]
     assert data["game"].tolist() == [7, 7, 7]
     assert data["random"].tolist() == [False, False, True]
+    assert data["static"].tolist() == [20, 30, 40]
     assert (data["own"][0] >= 0).sum() == 2 and (data["own"][2] >= 0).sum() == 4
     assert data["hand"].shape == (3, 16)
     assert json.loads(str(data["meta"]))["num_features"] == NUM_FEATURES

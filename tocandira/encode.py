@@ -18,8 +18,8 @@ Hive's 12 symmetries about the anchor (6 rotations, 6 reflections) are index per
 see `d6_tables()`, usable as free augmentation at training time.
 
 Dataset layout (`np.savez_compressed`): `own`, `opp` int16 [N, 28] padded with -1,
-`hand` int8 [N, 16], `score` int16, `outcome` int8, `ply` int16, `game` int32,
-`random` bool, `meta` JSON string.
+`hand` int8 [N, 16], `score` int16, `static` int16 (the engine's hand tuned evaluation,
+the baseline), `outcome` int8, `ply` int16, `game` int32, `random` bool, `meta` JSON.
 """
 
 from __future__ import annotations
@@ -149,7 +149,7 @@ def d6_tables() -> npt.NDArray[np.int32]:
     return tables.reshape(12, NUM_FEATURES)
 
 
-Row = tuple[list[int], list[int], list[int], int, int, int, bool]
+Row = tuple[list[int], list[int], list[int], int, int, int, bool, int]
 
 
 def encode_game(game: dict[str, Any]) -> list[Row]:
@@ -164,7 +164,16 @@ def encode_game(game: dict[str, Any]) -> list[Row]:
             p = positions[i]
             enc = encode(board)
             rows.append(
-                (enc.own, enc.opp, enc.hand, p["score"] or 0, p["outcome"], ply, bool(p["random"]))
+                (
+                    enc.own,
+                    enc.opp,
+                    enc.hand,
+                    p["score"] or 0,
+                    p["outcome"],
+                    ply,
+                    bool(p["random"]),
+                    p["static"],
+                )
             )
             i += 1
         if ply < len(moves):
@@ -211,6 +220,7 @@ def encode_dataset(path: str, out: str, workers: int = 1) -> int:
         ply=np.array([r[5] for r in rows], dtype=np.int16),
         game=np.array(game_ids, dtype=np.int32),
         random=np.array([r[6] for r in rows], dtype=bool),
+        static=np.array([r[7] for r in rows], dtype=np.int16),
         meta=np.array(json.dumps(meta)),
     )
     return len(rows)

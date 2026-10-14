@@ -45,6 +45,8 @@ indices; applying one to `own` and `opp` is a free augmentation at training time
 
 `hive-encode` writes `np.savez_compressed` with `own`, `opp` (int16 [N, 28], padded with
 -1), `hand` (int8 [N, 16]), `score` (int16, root negamax value from the side to move,
-±32767 forced), `outcome` (int8, +1/0/-1 for the side to move), `ply` (int16), `game`
-(int32), `random` (bool, an epsilon random move was played from this position) and
-`meta` (JSON: version, radius, levels, num_features, bug order, source file).
+±32767 forced), `static` (int16, nokamute's hand tuned evaluation of the same position,
+the baseline a learned evaluation has to beat), `outcome` (int8, +1/0/-1 for the side to
+move), `ply` (int16), `game` (int32), `random` (bool, an epsilon random move was played
+from this position) and `meta` (JSON: version, radius, levels, num_features, bug order,
+source file).

@@ -7,7 +7,7 @@ from tocandira.uhp import NOKAMUTE, PlayerSpec
 
 pytestmark = pytest.mark.skipif(not os.path.exists(NOKAMUTE), reason="engine not built")
 
-KEYS = {"ply", "score", "best", "played", "random", "pvlen", "outcome"}
+KEYS = {"ply", "score", "static", "best", "played", "random", "pvlen", "outcome"}
 
 
 def _game(eps: float, seed: int = 3) -> dict:

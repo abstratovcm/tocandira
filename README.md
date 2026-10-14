@@ -33,6 +33,9 @@ vs nokamute 1.0.3". Speed and move generation are nokamute's, not ours.
   - `hive-encode`: turns a labels file into NNUE style sparse features (npz).
 - `scripts/build_reference.sh`: builds the frozen opponent, upstream `v1.0.3`, into
   `reference/nokamute-1.0.3`. Never taken from the fork.
+- `tocandira/nnue.py`: the evaluation net and its training loop (torch, `uv sync --group train`).
+- `colab/`: round 1 generates shards of labeled positions into Drive (parallel instances),
+  round 2 trains on them (parallel configs).
 - `docs/`: [benchmarks](docs/benchmarks.md) (dated measurements and results),
   [encoding](docs/encoding.md) (feature design and dataset layout).
 - `runs/`: match records and datasets (gitignored).
