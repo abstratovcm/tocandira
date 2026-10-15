@@ -2,6 +2,36 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-15: which scalars matter, and an evaluation cache
+
+Profile with the best scalars net after the neighbour masks: `scalars` 22.6%, the pin search
+21.9%, the net about 20%. Two questions before building anything else.
+
+Which scalars carry the gain? Two ablation nets (width 128, 16 outputs, depth 5 target),
+trained with one group of scalars zeroed and that group's first layer weights set to zero,
+then screened at depth 5 against the fork (400 games):
+
+| scalars kept | Pearson vs depth 5 | Elo per node |
+|---|---|---|
+| none | 0.699 | +78 [+43, +113] |
+| cheap: liberties, placeable hexes, queen covered | 0.706 | +189 [+149, +228] |
+| pins: movable, pinned, queen stuck | 0.725 | +274 [+229, +319] |
+| all 12 | 0.721 | +315 [+266, +364] |
+
+Both groups matter in play, the pin group more; Pearson barely saw the cheap group's
++110. All 12 stay, and so does the pin search.
+
+How often does a search evaluate a position it already evaluated? An instrumented copy
+counted 8,184,131 evaluations on the 20 searches, 2,262,515 of them (27.6%) repeats within
+the same search: a null window probe that fails is searched again with the full window,
+and move orders transpose. The transposition table only starts at depth 1, so leaves were
+never cached. Now the net's evaluator keeps a per thread table of 2^18 entries keyed by the
+position's hash (pieces, stacks, side to move) and the net. Same 20 searches, byte
+identical for every net and the hand eval (which has no cache): best scalars net 7.08-7.32
+s -> 6.37-6.46 s (-11%); net c unchanged, its evaluation is about as cheap as a lookup.
+2^20 and 2^22 entries were no faster than 2^18 (6.20-6.30 s), which also needs a quarter of
+the memory per engine.
+
 ## 2026-10-15: neighbour masks in the board
 
 With the best scalars net, computing the scalars was half of a search (`scalars` 27%, the
