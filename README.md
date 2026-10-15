@@ -4,9 +4,9 @@
 Hive engine: nokamute's search with a learned evaluation (named after the bullet ant; in
 Hive the ant is the piece that goes anywhere). Fork of
 [nokamute](https://github.com/edre/nokamute) by Eric Roshan Eisner (MIT).
-Target: beat nokamute 1.0.3 at equal time per move. Status (2026-10-14): done by a modest
-margin, 54.8% [51.3, 58.2] over 800 games at 1 s per move, nokamute's search with the
-learned evaluation vs 1.0.3; see [docs/benchmarks.md](docs/benchmarks.md).
+Target: beat nokamute 1.0.3 at equal time per move. Status (2026-10-15): done, 84.9%
+[82.3, 87.2] (+300 Elo) over 800 games at 1 s per move, nokamute's search with the
+tocandira evaluation vs nokamute 1.0.3; see [docs/benchmarks.md](docs/benchmarks.md).
 
 ## Roadmap
 

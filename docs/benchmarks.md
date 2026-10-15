@@ -2,6 +2,29 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-15: the scalars net at equal time: +300 Elo over nokamute 1.0.3
+
+The candidate from the training round (depth 5 target, hidden 128, l2 16, the 12 strategy
+scalars) at 1 s per move on Colab (v6e-1, 22 games at a time), engine 07b9988 (neighbour
+masks, before the evaluation cache):
+
+| match | games | score | Elo |
+|---|---|---|---|
+| **vs nokamute 1.0.3** | 800 | **84.9% [82.3, 87.2]** | **+300 [+267, +334]** |
+| vs net c | 800 | 75.9% [72.9, 78.8] | +200 [+172, +228] |
+| vs the same target without scalars (hidden 256, l2 32) | 400 | 68.8% [64.0, 73.1] | +137 [+100, +174] |
+
+Against 1.0.3: W662 D35 L103 (9 of the draws are rules disagreements on repetition, as in
+every round), 90% as white and 80% as black, median 37 plies, both sides 0.78-0.79 s per
+move. No forfeits or illegal moves in any of the three matches.
+
+So, at equal time, nokamute's search with the tocandira evaluation went from +34 (net c,
+2026-10-14) to +300 over nokamute 1.0.3. From the screens and these matches the gain splits
+roughly into the relabeled depth 5 data, the strategy scalars (+137 here at equal time,
+about +200 per node) and the 1.6x faster engine (+52 for net c alone). The evaluation
+cache came after these matches, so the current engine is about 11% faster still with this
+net.
+
 ## 2026-10-15: which scalars matter, and an evaluation cache
 
 Profile with the best scalars net after the neighbour masks: `scalars` 22.6%, the pin search
