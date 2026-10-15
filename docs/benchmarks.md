@@ -2,6 +2,54 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-15: neighbour masks in the board
+
+With the best scalars net, computing the scalars was half of a search (`scalars` 27%, the
+pin search `find_cut_vertexes` 24%). Both kept asking the grid whether each neighbour of
+each bug is occupied, an unpredictable branch per neighbour. A first attempt that ran the
+pin search on a compact graph of the pieces was slower (8.3-8.5 s against 7.8 s): it still
+made the same occupancy checks, plus building the graph. Reverted.
+
+What worked: the board keeps, for every hex, a 6 bit mask of its occupied neighbours,
+updated when a hex becomes occupied or empty. The pin search walks the mask bits, and the
+scalars read the masks in one pass (the slide test is Board::slidable_adjacent's formula on
+the same bits). Prototyped in a copy and measured before building it: per mid game position
+the pin search went from 433 to 209 ns and the 12 scalars from 991 to 600 ns.
+
+Same 20 positions at depth 5, byte identical for net c, two scalars nets and the hand eval,
+interleaved runs: best scalars net 7.82-7.89 s -> 7.04-7.12 s (-10%), hand eval 7.07-7.11
+s -> 6.81-6.88 s (-3%). The masks and the scalars are checked against the grid along random
+games with undos.
+
+## 2026-10-15: training round on the relabeled data, and the scalars
+
+Local training on the RX 6750 XT (ROCm), all 60 relabeled shards, radius 6, lambda 1.0,
+patience 5, holdout by opening (186,062 positions), about 5 s per epoch on 3.8M positions.
+Pearson against the depth 5 score on that holdout is the yardstick; between two runs of
+the same config it moves by ~0.006, so smaller differences are noise.
+
+Per node strength: each net against the fork with the hand eval, both at depth 5, 400
+games (net c, same kind of match last round: +35 [+11, +59] over 800 games).
+
+| net (target, hidden, l2) | Pearson vs depth 5 | Elo at depth 5 vs fork | search s, 20 positions |
+|---|---|---|---|
+| d4, 256, 32 | 0.641 | +62 [+28, +97] | |
+| d45, 256, 32 | 0.686 | +96 [+61, +131] | |
+| d5, 256, 32 | 0.696 | +117 [+81, +153] | 5.6 |
+| d5, 128, 32 | 0.697 | +52 [+17, +86] | 4.6 |
+| d5, 256, 16 | 0.694 | +82 [+47, +117] | 4.8 |
+| d5, 128, 16 | 0.699 | +78 [+43, +113] | 4.5 |
+| d5, 256, 32, scalars | 0.715 | **+286 [+240, +333]** | 8.4 |
+| d5, 128, 16, scalars | 0.721 | **+315 [+266, +364]** | 7.7 (7.1 with the masks) |
+
+Readings. Labels at depth 5 on positions from long games make the best target: last
+round's depth 5 nets, trained on short depth 5 games, got +4 in this match. The side to
+move offset of an odd depth does not hurt play (a constant offset shifts every leaf of a
+fixed depth search alike). Smaller nets keep the offline Pearson but lose per node, so
+Pearson alone does not rank nets. The strategy scalars are the largest gain of the
+project: about +200 Elo per node over the same net without them, at about 1.6x the search
+time (before the neighbour masks). No forfeits or rules disagreements in any of these games.
+
 ## 2026-10-15: fused accumulator update
 
 After the stack, applying a move still made separate passes over each accumulator: copy
@@ -139,9 +187,10 @@ Re-searching 40 depth 4 games (2,323 positions) at depth 4, one thread: 2.7% of 
 differ from the stored ones, and two fresh runs differ from each other by as much (3.3%,
 median 5 points, max ~40). The engine changes since the data was made do not matter
 (engine 493eb5f, which made it, gives the same picture). The cause is minimax 0.6.0
-shuffling the root moves with an OS seeded generator before every search; null move
-pruning, the transposition table and aspiration windows make the root value depend on
-that order. The fork now vendors minimax with that shuffle seeded by the position's hash
+shuffling the root moves with an OS seeded generator before every search; the
+transposition table and the move ordering history make the root value depend on that
+order (null move pruning, aspiration windows and quiescence search are off by default in
+nokamute, as in all our labels and matches). The fork now vendors minimax with that shuffle seeded by the position's hash
 (splitmix64, stable across platforms). Fork vs fork games are now a function of the
 opening; 1.0.3 is unchanged.
 
