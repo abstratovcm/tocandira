@@ -2,6 +2,18 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-15: the cache lookup waits for memory; prefetch
+
+With the evaluation cache in place, about 10% of a search sat on one line: reading the
+cache slot of the position, a random entry of a 4 MB table. Smaller tables (2^14 to 2^17
+entries) were all within noise of 2^18 (6.02-6.33 s on the 20 positions, machine under
+load): fewer hits cancel the cheaper lookups. Instead, `Board::apply` now prefetches the
+slot of the new position, so it is on its way while the search does other work; and the
+queen surround check of `get_winner` reads the neighbour masks (a popcount instead of
+six grid lookups per queen). Both byte identical for every net and the hand eval;
+together 6.22-6.38 s -> 6.06-6.16 s with the best scalars net (about 2.5%), hand eval
+about 1.5%. The `memset` in the profile (1.7%) comes from the search, not the evaluation.
+
 ## 2026-10-15: where the scalars' time goes, one miss and one small gain
 
 Measured on the debug built engine with the best scalars net (5 of the 20 positions):
