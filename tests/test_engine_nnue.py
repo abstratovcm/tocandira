@@ -17,7 +17,8 @@ pytestmark = pytest.mark.skipif(not os.path.exists(NOKAMUTE), reason="engine not
 
 def _weights(seed: int, scalars: int = 0) -> Weights:
     rng = np.random.default_rng(seed)
-    w = Weights(RADIUS, geometry(RADIUS).num_features, 8, 4, 400.0, {}, scalars)
+    # l2 = 12: the engine's 8 row AVX2 kernel and its one row remainder path both run.
+    w = Weights(RADIUS, geometry(RADIUS).num_features, 8, 12, 400.0, {}, scalars)
     w.arrays = {k: rng.normal(0, 0.2, s).astype(np.float32) for k, s in w.shapes().items()}
     return w
 

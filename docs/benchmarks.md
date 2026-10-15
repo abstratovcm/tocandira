@@ -2,6 +2,36 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-14: a layer kernel, the net now cheaper than the hand eval
+
+Profile first (`perf record -e cycles:u`, net c searching 20 mid game positions at depth 5,
+one thread): 38% of the time was the first layer's dot products and 17% the rest of
+`Nnue::evaluate`, and inside the dot product only ~25% of the cycles were multiply-adds.
+The rest was the horizontal reduction (~47%) and call and loop setup (~20%): 64 calls of 8
+iterations per evaluation for the first layer, 32 calls of one iteration for the second.
+Net c's activations are 51% zero but scattered (93% of 4 wide groups hold a nonzero), so
+skipping zero blocks would gain little.
+
+Change (bit exact, integer arithmetic only): both small layers go through one kernel that
+loads each 32 byte block of the input once for 8 rows, keeps 8 sums in registers, reduces
+them together, and does bias, shift and clamp for the 8 in vector instructions; the rows
+are zero padded to whole blocks and the AVX2 check is done once at load. The feature index
+of a wrapped offset is a table read instead of cube rounding.
+
+The 20 searches give byte identical output (moves, scores, pv) before and after, for net c
+and for a net with scalars. Wall time, same machine and load, three runs each:
+
+| | before | after |
+|---|---|---|
+| net c, 20 positions at depth 5 | 9.2-9.5 s | 6.4 s |
+| hand eval, same positions | 7.1 s | 7.1 s |
+
+Per evaluation (`benches/nnue.rs`, same run): net r6 h256 incremental 548 -> 251 ns, h128
+492 -> 178 ns, h256 with scalars 1.06 -> 0.71 µs; hand eval 457 ns. After the change the
+profile is: first layer kernel 29%, accumulator updates 17% (add_row 11%, sub_row 6%), move
+ordering sorts ~7%, the rest of evaluate 7%. Next candidate: an accumulator stack (no undo
+subtraction).
+
 ## 2026-10-14: what the strategy scalars cost
 
 `benches/nnue.rs`, mid game position (25 pieces), machine under load (load average ~6), so
