@@ -2,6 +2,42 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-15: fused accumulator update
+
+After the stack, applying a move still made separate passes over each accumulator: copy
+the parent's entry, subtract the piece's old row, add its new one (a placement: add the
+piece, then two hand rows). Now the hooks only record the row changes and one pass per
+perspective writes the new entry from the parent's, applying them in the same order with
+the same saturating arithmetic (a perspective whose anchor moved is rebuilt, as before).
+
+Same 20 positions at depth 5, byte identical output (net c and a net with scalars), four
+interleaved runs: 5.74-5.87 s before, 5.64-5.69 s after, about 2% (roughly +1 to +2 Elo at
+the measured value of speed). Less than the 5-7% expected: the single pass is 8.9% of a
+search against 12.8% for the separate passes, but recording the rows and the commit add
+back about 3%; what is left is memory traffic (parent, 2-3 rows, child). Tests: the pass
+against row by row saturating arithmetic near the i16 limits, search shaped trees at
+widths 8 and 32.
+
+## 2026-10-15: the relabeled dataset
+
+Every position of the 30,000 depth 4 and 30,000 depth 5 games searched again at depths 3,
+4 and 5, each by a fresh engine (one thread, 16 MiB table, root order seeded by the
+position), on two Colab sessions overnight. Recomputing 12 of those games on the Ryzen
+gives the same 1,353 scores: the labels are a function of the position, across machines
+and engine commits.
+
+| games played at | positions | mean side to move score, depth 3 / 4 / 5 | forced at depth 5 | r(depth 4, depth 5) |
+|---|---|---|---|---|
+| depth 4 | 2,310,987 | +60 / +1 / +118 | 6.8% | 0.81 |
+| depth 5 | 1,460,396 | +118 / -10 / +111 | 9.1% | 0.91 |
+
+The odd depth bias shows on the same positions: depths 3 and 5 favour the side to move,
+depth 4 does not. The mean of depths 4 and 5 in win probability (target `d45`) halves it
+(+33) rather than cancelling it. The static eval correlates 0.29 with depth 4 and 0.33
+with depth 5 on the common holdout: 27,146 openings, the games of 5% of them held out
+(186,062 positions), the same for every net. The 12 strategy scalars were added locally
+(one replay per game) without changing any other array.
+
 ## 2026-10-15: what the speed work is worth, and why not lazy updates
 
 Same net (c), same evaluations, only the engine's speed differs: today's engine (layer

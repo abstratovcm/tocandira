@@ -16,12 +16,15 @@ held out games every epoch, the best checkpoint kept, early stopping on patience
 
 from __future__ import annotations
 
+import argparse
+import glob
 import hashlib
 import json
 import os
+import sys
 import time
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from typing import Any
 
 import numpy as np
@@ -421,3 +424,39 @@ def export_weights(model: Nnue, path: str, meta: Meta) -> None:
         radius=np.int32(meta["radius"]),
         num_features=np.int32(meta["num_features"]),
     )
+
+
+def _config(items: list[str]) -> Config:
+    """A Config from `key=value` items, each value parsed as the type of its default."""
+    defaults = Config()
+    values: dict[str, Any] = {}
+    names = {f.name for f in fields(Config)}
+    for item in items:
+        key, _, text = item.partition("=")
+        if key not in names:
+            raise SystemExit(f"unknown config field {key!r}; known: {sorted(names)}")
+        kind = type(getattr(defaults, key))
+        values[key] = text.lower() in ("1", "true", "yes") if kind is bool else kind(text)
+    return Config(**values)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Train one net on every npz shard of a folder; see `Config` for the fields."""
+    p = argparse.ArgumentParser(
+        description="hive-train runs/data/msr6 runs/models/i/d45-h256 target=d45 lam=1.0",
+    )
+    p.add_argument("data", help="folder of npz shards of one radius")
+    p.add_argument("out", help="output folder: nnue.pt, weights.npz, log.jsonl")
+    p.add_argument("config", nargs="*", help="Config fields as key=value")
+    args = p.parse_args(argv)
+    cfg = _config(args.config)
+    data, meta = load_shards(sorted(glob.glob(os.path.join(args.data, "*.npz"))))
+    cfg.radius = int(meta["radius"])  # the data's, as train() does
+    print(f"{meta['shards']} shards, {len(data['score'])} positions, {asdict(cfg)}", flush=True)
+    result = train(data, meta, cfg, args.out, log=lambda line: print(line, flush=True))
+    print(f"static eval: {result.baseline}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
