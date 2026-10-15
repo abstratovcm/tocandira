@@ -50,9 +50,11 @@ def load_shards(paths: list[str]) -> tuple[Data, Meta]:
 
     A file whose bytes were already loaded is skipped and counted in `meta["duplicates"]`:
     two sessions encoding into one Drive folder leave identical copies, and with their own
-    game ids a held out game's copy would land in the training set.
+    game ids a held out game's copy would land in the training set. Optional arrays (labels
+    of one generation, scalars) are kept only if every shard has them; the others are
+    listed in `meta["dropped"]`.
     """
-    parts: dict[str, list[npt.NDArray[Any]]] = {}
+    shards: list[dict[str, npt.NDArray[Any]]] = []
     meta: Meta = {}
     seen: set[str] = set()
     duplicates = 0
@@ -69,15 +71,21 @@ def load_shards(paths: list[str]) -> tuple[Data, Meta]:
             if meta and m["radius"] != meta["radius"]:
                 raise ValueError(f"{path}: radius {m['radius']} differs from {meta['radius']}")
             meta = {"radius": m["radius"], "num_features": m["num_features"], "shards": i + 1}
-            extra = [k for k in d.files if k in OPTIONAL or (k[:5] == "score" and k[5:].isdigit())]
-            keys = [*ARRAYS, *sorted(extra)]
-            if parts and sorted(parts) != sorted(keys):
-                raise ValueError(f"{path}: arrays {sorted(keys)} differ from {sorted(parts)}")
-            for k in keys:
-                arr = d[k].astype(np.int64) + i * 10_000_000 if k == "game" else d[k]
-                parts.setdefault(k, []).append(arr)
+            extra = [
+                k
+                for k in d.files
+                if k in OPTIONAL or (k[:5] == "score" and k[5:].isdigit()) or k[:6] == "score_"
+            ]
+            shards.append(
+                {
+                    k: d[k].astype(np.int64) + i * 10_000_000 if k == "game" else d[k]
+                    for k in [*ARRAYS, *extra]
+                }
+            )
+    common = set.intersection(*(set(shard) for shard in shards))
     meta["duplicates"] = duplicates
-    return {k: np.concatenate(v) for k, v in parts.items()}, meta
+    meta["dropped"] = sorted(set.union(*(set(shard) for shard in shards)) - common)
+    return {k: np.concatenate([shard[k] for shard in shards]) for k in sorted(common)}, meta
 
 
 def split_by_game(
@@ -107,11 +115,13 @@ def target_score(data: Data, target: str) -> npt.NDArray[np.float32]:
     """The score a net is trained on, per position.
 
     `"score"` is the depth the games were labeled at; `"d5"`, `"d45"`, ... (relabeled data)
-    take the mean of those depths' win probabilities, back in score units. Averaging an odd
-    and an even depth cancels most of the side to move bias of an odd depth search.
+    take the mean of those depths' win probabilities, back in score units; `"net5"` is the
+    search with a net at depth 5 (`hive-label --nnue`).
     """
     if target == "score":
         return data["score"].astype(np.float32)
+    if target[:3] == "net" and target[3:].isdigit():
+        return data[f"score_{target}"].astype(np.float32)
     if not (target[:1] == "d" and target[1:].isdigit()):
         raise ValueError(f"target {target!r}: expected 'score' or 'd' and depths, e.g. 'd45'")
     probs = [

@@ -27,8 +27,7 @@ nokamute"; speed and move generation are nokamute's, not ours.
 - `tocandira/`: Python lab (numpy is the only runtime dependency).
   - `hive-tournament`: engine vs engine matches over UHP, parallel games, paired random
     openings with colours swapped, Wilson interval, Elo, optional SPRT early stop.
-  - `hive-label`: self play that records the engine's search score and the final outcome
-    for every position, i.e. training data for the evaluation.
+  - `hive-label`: self play, and relabeling of positions (search scores, scalars): the data.
   - `hive-encode`: turns a labels file into NNUE style sparse features (npz).
 - `scripts/build_reference.sh`: builds the frozen opponent, upstream `v1.0.3`, into
   `reference/nokamute-1.0.3`. Never taken from the fork.
@@ -36,7 +35,8 @@ nokamute"; speed and move generation are nokamute's, not ours.
 - `colab/`: two copies per round, one per Colab session: `01_generate_instance{0,1}`
   (self play), `01_relabel_instance{0,1}` (depths 3-5), `02_train_{a,b}` (a sweep each),
   `03_match_{a,b}` (match lists against the fork and the 1.0.3 reference).
-- `docs/`: dated [benchmarks](docs/benchmarks.md), [encoding](docs/encoding.md) design, `logo/`.
+- `docs/`: dated [benchmarks](docs/benchmarks.md), [encoding](docs/encoding.md) design,
+  [pipeline](docs/pipeline.md) (how a round goes), `logo/`.
 - `runs/`: match records and datasets (gitignored).
 
 ## Setup

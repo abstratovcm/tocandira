@@ -24,7 +24,8 @@ the baseline), `outcome` int8, `ply` int16, `game` int32, `random` bool, `openin
 (hash of the game's first 4 moves), `source` int8 (depth the game was played at, 0 if not
 recorded), `meta` JSON (version, radius, num_features, depths, ...). Relabeled games
 (`hive-label --relabel`) add one int16 array per searched depth: `score3`, `score4`, ...,
-and with `--scalars` the strategy scalars, `scalars` uint8 [N, 12].
+`score_net5` for a search with a net (`--nnue`), and with `--scalars` the strategy
+scalars, `scalars` uint8 [N, 12].
 """
 
 from __future__ import annotations
@@ -243,12 +244,15 @@ def encode_dataset(path: str, out: str, workers: int = 1, radius: int = RADIUS) 
     sources = [g.get("depth", 0) for g, rows in zip(games, per_game, strict=True) for _ in rows]
     # Rows follow each game's positions in ply order (`encode_game`).
     ordered = [p for g in games for p in sorted(g["positions"], key=lambda p: int(p["ply"]))]
-    depths = sorted({int(d) for p in ordered for d in p.get("scores", {})})
-    if any(sorted(int(d) for d in p.get("scores", {})) != depths for p in ordered):
-        raise ValueError(f"{path}: positions searched at different depths")
+    labels = sorted({key for p in ordered for key in p.get("scores", {})})
+    if any(sorted(p.get("scores", {})) != labels for p in ordered):
+        raise ValueError(f"{path}: positions labeled at different depths")
+    depths = sorted(int(key) for key in labels if key.isdigit())
     scores: dict[str, Any] = {
-        f"score{d}": np.array([p["scores"][str(d)] or 0 for p in ordered], dtype=np.int16)
-        for d in depths
+        (f"score{key}" if key.isdigit() else f"score_{key}"): np.array(
+            [p["scores"][key] or 0 for p in ordered], dtype=np.int16
+        )
+        for key in labels
     }
     with_scalars = sum("scalars" in p for p in ordered)
     if with_scalars not in (0, len(ordered)):
@@ -264,6 +268,8 @@ def encode_dataset(path: str, out: str, workers: int = 1, radius: int = RADIUS) 
         "max_pieces": MAX_PIECES,
         "source": os.path.basename(path),
         "depths": depths,
+        "labels": labels,
+        "labeler": next((g["labeler"] for g in games if "labeler" in g), None),
     }
     np.savez_compressed(
         out,

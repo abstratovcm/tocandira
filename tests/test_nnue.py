@@ -72,7 +72,13 @@ def test_load_shards_keeps_game_ids_unique_and_checks_radius(tmp_path):
     merged, meta = load_shards([str(tmp_path / "shard0.npz"), str(tmp_path / "shard1.npz")])
     assert len(merged["score"]) == 200
     assert len(np.unique(merged["game"])) == 4
-    assert meta == {"radius": RADIUS, "num_features": NUM_FEATURES, "shards": 2, "duplicates": 0}
+    assert meta == {
+        "radius": RADIUS,
+        "num_features": NUM_FEATURES,
+        "shards": 2,
+        "duplicates": 0,
+        "dropped": [],
+    }
     _save(tmp_path / "other.npz", _synthetic(100, seed=1), {"radius": 12, "num_features": 30016})
     with pytest.raises(ValueError, match="radius"):
         load_shards([str(tmp_path / "shard0.npz"), str(tmp_path / "other.npz")])
@@ -88,17 +94,20 @@ def test_load_shards_skips_a_copy_of_a_shard(tmp_path):
     assert (meta["shards"], meta["duplicates"]) == (1, 1)
 
 
-def test_load_shards_carries_relabeled_arrays_and_rejects_a_mix(tmp_path):
+def test_load_shards_keeps_the_arrays_every_shard_has(tmp_path):
     v3 = {**_synthetic(100, seed=1), "opening": np.arange(100, dtype=np.int64)}
     v3["score5"] = v3["score"] + 1
     _save(tmp_path / "a.npz", v3)
     _save(tmp_path / "b.npz", {**v3, "score5": v3["score"] + 2})
-    merged, _ = load_shards([str(tmp_path / "a.npz"), str(tmp_path / "b.npz")])
+    merged, meta = load_shards([str(tmp_path / "a.npz"), str(tmp_path / "b.npz")])
     assert merged["score5"].tolist() == (v3["score"] + 1).tolist() + (v3["score"] + 2).tolist()
     assert len(merged["opening"]) == 200
-    _save(tmp_path / "v2.npz", _synthetic(100, seed=2))
-    with pytest.raises(ValueError, match="arrays"):
-        load_shards([str(tmp_path / "a.npz"), str(tmp_path / "v2.npz")])
+    assert meta["dropped"] == []
+    # A shard with another generation's labels: only what both have is kept.
+    _save(tmp_path / "c.npz", {**v3, "score_net5": v3["score"]})
+    merged, meta = load_shards([str(tmp_path / "a.npz"), str(tmp_path / "c.npz")])
+    assert "score_net5" not in merged and "score5" in merged
+    assert meta["dropped"] == ["score_net5"]
 
 
 def test_target_score_averages_depths_in_win_probability():
@@ -106,7 +115,9 @@ def test_target_score_averages_depths_in_win_probability():
         "score": np.array([7, 0, 0], dtype=np.int16),
         "score4": np.array([100, 400, 32767], dtype=np.int16),
         "score5": np.array([100, -400, 32767], dtype=np.int16),
+        "score_net5": np.array([5, 6, 7], dtype=np.int16),
     }
+    assert target_score(data, "net5").tolist() == [5, 6, 7]
     assert target_score(data, "score").tolist() == [7, 0, 0]
     d45 = target_score(data, "d45")
     assert d45[0] == pytest.approx(100, abs=0.01)  # equal depths: the score itself

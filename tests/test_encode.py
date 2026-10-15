@@ -154,12 +154,13 @@ def test_encode_relabeled_games(tmp_path):
             "static": 0,
             "outcome": 0,
             "random": False,
-            "scores": {"3": s3, "5": s5},
+            "scores": {"3": s3, "5": s5, "net5": s3 + 1},
             "scalars": [ply] * 11 + [200],
         }
 
     games = [
         {"id": 1, "game_type": "Base+MLP", "moves": moves, "depth": 4,
+         "labeler": {"net": "n.bin", "sha1": "ab"},
          "positions": [pos(5, 50, 55), pos(4, 40, None)]},
         {"id": 2, "game_type": "Base+MLP", "moves": moves[:5], "depth": 5,
          "positions": [pos(4, 41, 46)]},
@@ -171,7 +172,10 @@ def test_encode_relabeled_games(tmp_path):
     out = tmp_path / "labels.npz"
     encode_dataset(str(labels), str(out), radius=6)
     data = np.load(out)
-    assert json.loads(str(data["meta"]))["depths"] == [3, 5]
+    meta = json.loads(str(data["meta"]))
+    assert (meta["depths"], meta["labels"]) == ([3, 5], ["3", "5", "net5"])
+    assert meta["labeler"] == {"net": "n.bin", "sha1": "ab"}
+    assert data["score_net5"].tolist() == [41, 51, 42, 31]
     assert data["ply"].tolist() == [4, 5, 4, 3]
     assert data["score3"].tolist() == [40, 50, 41, 30]
     assert data["score5"].tolist() == [0, 55, 46, 35]

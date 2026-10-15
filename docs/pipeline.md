@@ -1,0 +1,70 @@
+# Pipeline: data, labels, training, matches
+
+How a round goes, what a label is, and the rules learned so far. Measured numbers live in
+[benchmarks.md](benchmarks.md); this file says how to produce them.
+
+## A round
+
+| step | tool | where | time |
+|---|---|---|---|
+| 1. self play | `hive-label --games ... --depth 4 [--engine-options "cmd=<fork> --nnue <net>"]` | `colab/01_generate_instance{0,1}` | ~1 h per 60k games on two v6e-1 |
+| 2. labels | `hive-label --relabel <games> --depths 3,4,5 [--nnue <net> --nnue-depths 5]` | `colab/01_relabel_instance{0,1}` | ~6-8 h per 2M positions per label kind, two v6e-1 |
+| 3. scalars | `hive-label --relabel <labeled> --depths "" --scalars`, then `hive-encode --radius 6` | local | ~5 min per 4M positions |
+| 4. training | `hive-train <npz folder> <out> target=d5 hidden=128 l2=16 scalars=true lam=1.0 patience=5 max_epochs=60` | local GPU (ROCm) | ~5 s per epoch per 4M positions |
+| 5. screen | `hive-tournament --a "cmd=<fork> --nnue <net>,depth=5" --b "cmd=<fork>,depth=5" --games 400` | local, 14 workers | ~10 min |
+| 6. timed matches | `hive-tournament ... seconds=1 ... --games 800` | `colab/03_match_{a,b}` | ~30 min per 800 games on a v6e-1 |
+
+Generation, labels and matches are CPU work (one search per core): the v6e-1 runtimes are
+bought for their 44 vCPUs, the TPU stays idle. Training is the only GPU step.
+
+Drive (`MyDrive/tocandira/`): `data/<set>` raw games (`shard-NNN.jsonl.gz`), `data/m` and
+`data/mr6` relabeled games and their radius 6 encoding, `models/<sweep>/<name>/weights.npz`
+(the notebooks export `weights.bin` next to it), `matches/` records and `summary.txt`.
+Locally the same folders live under `runs/` (gitignored); `runs/data/msr6` is `mr6` with the
+scalars added.
+
+## What a label is
+
+`score<d>` is the root value of a search at depth d from the side to move, by a fresh
+engine for every position (`newgame` with the moves so far, one thread, 16 MiB table, root
+moves in an order seeded by the position). It is a function of the position: the same
+position gets the same score in any game, order, session or machine (checked: 1,353 scores
+recomputed across machines, 0 differ). Speed work on the engine is bit exact, so it never
+changes labels. `score_net<d>` is the same with a net's evaluation; the record's `labeler`
+names the net file and its sha1, because those labels belong to that net.
+
+## Label generations
+
+A generation is one frozen labeler: engine commit, net file (sha1), depth.
+
+| generation | labeler | data |
+|---|---|---|
+| 0 | nokamute's hand eval, depths 3, 4, 5 | d4 and d5 games (3.8M positions), n4 games |
+| 1 (candidate) | net `i/d5-h128-l16-s`, depth 5 (`score_net5`) | n4 games (net self play, seeds 3000+) |
+
+Policy:
+- Never relabel history. A round labels only its own new positions, with the current
+  generation: constant cost per round, whatever the total.
+- Old data is retired, not relabeled: train on a window of recent data weighted toward the
+  newest generation; older generations fall out of the window.
+- A new generation only at a milestone (a new net clearly beats the labeler at equal
+  time) and after an A/B test: same positions, both label kinds, two nets, screens.
+- A small fixed reference set may be relabeled by each generation, to compare them.
+- `load_shards` keeps only the arrays every shard has: a target from one generation means
+  training on that generation's shards.
+
+## Rules learned the hard way
+
+- Only one session encodes a given Drive folder at a time: two sessions encoding radius 6
+  at once left byte identical copies that leaked the holdout (2026-10-14). `load_shards`
+  now skips duplicate files.
+- The holdout is by opening (same seeds give the same openings across game sets).
+- Pearson does not rank nets: smaller nets and the cheap scalars looked equal offline and
+  differed by 40-110 Elo per node. The depth 5 screen decides, the timed match confirms.
+- No timed match on an engine that is about to change: finish the speed work first, then
+  measure once. Fixed depth screens do not depend on speed.
+- Speed is worth about +75 Elo per doubling at 1 s/move (measured with net c).
+- Measure before building speed work: two of four attempts on 2026-10-15 were slower, a
+  microbenchmark can mislead, the 20 position search time decides.
+- Every speed change is bit exact: byte identical output on the 20 benchmark positions for
+  net c, a scalars net and the hand eval.

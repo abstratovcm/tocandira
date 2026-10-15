@@ -1,7 +1,10 @@
+import hashlib
 import os
 
+import numpy as np
 import pytest
 
+from tocandira.encode import geometry
 from tocandira.label import label_game, relabel_game
 from tocandira.uhp import NOKAMUTE, PlayerSpec
 
@@ -66,3 +69,20 @@ def test_scalars_pass_keeps_scores():
     for before, after in zip(game["positions"], with_scalars["positions"], strict=True):
         assert after["scores"] == before["scores"]
         assert len(after["scalars"]) == 12
+
+
+def test_relabel_with_a_net_adds_its_labels(tmp_path):
+    from tocandira.weights import Weights, write_bin  # noqa: PLC0415
+
+    rng = np.random.default_rng(0)
+    w = Weights(6, geometry(6).num_features, 8, 4, 400.0, {})
+    w.arrays = {k: rng.normal(0, 0.2, s).astype(np.float32) for k, s in w.shapes().items()}
+    path = tmp_path / "net.bin"
+    write_bin(w, str(path))
+    game = _game(eps=0.0)
+    a = relabel_game(game, [2], source_depth=1, nnue=str(path), nnue_depths=(2,))
+    assert all(set(p["scores"]) == {"2", "net2"} for p in a["positions"])
+    assert a["labeler"] == {"net": "net.bin", "sha1": hashlib.sha1(path.read_bytes()).hexdigest()}
+    # Another evaluator, another search: the labels differ somewhere, and repeat exactly.
+    assert any(p["scores"]["2"] != p["scores"]["net2"] for p in a["positions"])
+    assert relabel_game(game, [2], source_depth=1, nnue=str(path), nnue_depths=(2,)) == a
