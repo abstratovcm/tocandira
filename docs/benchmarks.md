@@ -2,6 +2,28 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-14: an accumulator stack, undo for free
+
+After the layer kernel, keeping the accumulators in step was 17% of a search with net c
+(add_row 11%, sub_row 6%): a move cost 4 row operations to apply and 4 more to undo, and
+a queen moving or being placed rebuilt both perspectives from scratch, on apply and again
+on undo (a queen placement twice).
+
+Change: one accumulator entry per ply of the current line. Applying a move copies the top
+entry and updates the copy; undoing drops it, so an undo costs nothing. A perspective is
+rebuilt only when its anchor moved (a queen it is anchored on was placed or moved), with
+the anchors kept in each entry. A copied board keeps only the top entry, and undoing below
+the bottom (moves made before the net was attached) rebuilds from the board.
+
+Same 20 positions at depth 5, byte identical output, three interleaved runs: 6.31-6.44 s
+before, 5.78-5.85 s after (-8.5%). Apply+undo of one ordinary move on one board: 111 ->
+88 ns (the benchmark used to copy the board on every iteration, which timed the copy).
+Profile after: layer kernel 32%, accumulator updates ~10.5% (add_row 7.5%, sub_row 3%)
+plus the copy 2.3%, move ordering sorts ~6%.
+
+Since the profile work started: 9.3 s -> 5.8 s for the same searches (1.6x), with
+evaluations and searches unchanged. The hand eval takes 7.1 s on them.
+
 ## 2026-10-14: a layer kernel, the net now cheaper than the hand eval
 
 Profile first (`perf record -e cycles:u`, net c searching 20 mid game positions at depth 5,
