@@ -2,6 +2,30 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-15: where the scalars' time goes, one miss and one small gain
+
+Measured on the debug built engine with the best scalars net (5 of the 20 positions):
+inclusive, `scalars()` is about 30% of a search, half in its own code and half in the pin
+search it calls (nearly all of the pin search's time; move generation's share is small).
+Within its own code, the loop that marks the empty hexes next to each bug for the two
+placeable counts takes most of the time. Of the 5,023,327 evaluations the cache does not
+answer on the 20 searches, 35.1% follow a placement touching exactly one hex, 11.6% a
+placement touching more, 53.4% a piece move.
+
+Incremental placeable counts (the board keeping, per hex, how many top pieces of each
+colour touch it, and the two totals): byte identical, but **slower**, 6.56-6.66 s against
+6.12-6.16 s with the scalars net and 7.89-7.91 s against 6.69-6.75 s with the hand eval.
+The upkeep runs on every insert and remove, interior nodes included, and costs more than
+the loop it replaced, which only ran at evaluated leaves. Reverted.
+
+Kept cut vertexes after a one hex placement: a piece placed next to a single hex is a leaf
+of the hive's graph, so the new position's cut vertexes are the old ones plus that
+neighbour. For a net with scalars, apply computes the old set once per position (on its
+first such placement) and keeps the new set in the new stack entry, where the scalars
+read it. Byte identical; kept sets are compared with a full search along search shaped
+trees. 6.12-6.24 s -> 5.99-6.08 s with the scalars net (about 2%; part of those leaves were
+already answered by the evaluation cache), net c unchanged.
+
 ## 2026-10-15: the scalars net at equal time: +300 Elo over nokamute 1.0.3
 
 The candidate from the training round (depth 5 target, hidden 128, l2 16, the 12 strategy
