@@ -57,3 +57,12 @@ def test_relabel_depends_on_the_position_only():
     assert [p["scores"] for p in again["positions"]] == [
         p["scores"] for p in full["positions"][4:8]
     ]
+
+
+def test_scalars_pass_keeps_scores():
+    game = relabel_game(_game(eps=0.0), [2], source_depth=1)
+    with_scalars = relabel_game(game, [], scalars=True)
+    assert with_scalars["depth"] == 1
+    for before, after in zip(game["positions"], with_scalars["positions"], strict=True):
+        assert after["scores"] == before["scores"]
+        assert len(after["scalars"]) == 12

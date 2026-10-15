@@ -30,11 +30,13 @@ import torch
 from torch import Tensor, nn
 
 from .encode import MAX_PIECES, geometry
+from .weights import NUM_SCALARS, SCALAR_MAX
 
 SCALE = 400.0  # score units per logit: a +400 score is a 73% win probability
 CLAMP = 3000  # scores beyond this (forced wins are ±32767) count as decisive
 ARRAYS = ("own", "opp", "hand", "score", "static", "outcome", "ply", "game", "random")
-OPTIONAL = ("opening", "source")  # layout version 3, plus one `score<depth>` per searched depth
+# Layout version 3, plus one `score<depth>` per searched depth; `scalars` from hive-label --scalars.
+OPTIONAL = ("opening", "source", "scalars")
 
 Data = dict[str, npt.NDArray[Any]]
 Meta = dict[str, Any]
@@ -120,24 +122,37 @@ def target_score(data: Data, target: str) -> npt.NDArray[np.float32]:
 class Nnue(nn.Module):
     """Two perspective accumulator net; see the module docstring."""
 
-    def __init__(self, num_features: int, hidden: int = 256, l2: int = 32):
+    scalar_max: Tensor  # buffer: SCALAR_MAX for the scalars this net takes
+
+    def __init__(self, num_features: int, hidden: int = 256, l2: int = 32, scalars: int = 0):
         super().__init__()
         self.num_features = num_features
+        self.scalars = scalars  # strategy scalars fed to l1 after both accumulators: 0 or 12
         self.pad = num_features  # embedding row reserved for the -1 padding in the npz
         self.ft = nn.EmbeddingBag(num_features + 1, hidden, mode="sum", padding_idx=self.pad)
         nn.init.normal_(self.ft.weight, std=0.5 / MAX_PIECES**0.5)
         self.hand = nn.Linear(16, hidden)
-        self.l1 = nn.Linear(2 * hidden, l2)
+        self.l1 = nn.Linear(2 * hidden + scalars, l2)
+        self.register_buffer("scalar_max", torch.tensor(SCALAR_MAX[:scalars], dtype=torch.float32))
         self.l2 = nn.Linear(l2, l2)
         self.out = nn.Linear(l2, 1)
 
-    def forward(self, own: Tensor, opp: Tensor, hand: Tensor) -> Tensor:
-        """Score in nokamute units for the side to move; `own`/`opp` are [B, 28] long with pad."""
+    def forward(
+        self, own: Tensor, opp: Tensor, hand: Tensor, scalars: Tensor | None = None
+    ) -> Tensor:
+        """Score in nokamute units for the side to move; `own`/`opp` are [B, 28] long with pad.
+
+        `scalars` ([B, 12], raw counts) is required when the net was built with scalars.
+        """
         hand = hand.float()
         swapped = torch.cat([hand[:, 8:], hand[:, :8]], dim=1)
         a = (self.ft(own) + self.hand(hand)).clamp(0, 1)
         b = (self.ft(opp) + self.hand(swapped)).clamp(0, 1)
-        x = self.l1(torch.cat([a, b], dim=1)).clamp(0, 1)
+        parts = [a, b]
+        if self.scalars:
+            assert scalars is not None, "this net takes strategy scalars"
+            parts.append((scalars.float() / self.scalar_max).clamp(max=1))
+        x = self.l1(torch.cat(parts, dim=1)).clamp(0, 1)
         x = self.l2(x).clamp(0, 1)
         return self.out(x).squeeze(1) * SCALE
 
@@ -199,6 +214,7 @@ class Config:
     holdout: float = 0.05
     seed: int = 0
     augment: bool = True  # random D6 symmetry per batch
+    scalars: bool = False  # feed the strategy scalars to the first layer (needs them in the data)
 
 
 class Tensors:
@@ -212,6 +228,11 @@ class Tensors:
         self.score = torch.from_numpy(data["score"].astype(np.float32)).to(device)
         self.static = torch.from_numpy(data["static"].astype(np.float32)).to(device)
         self.outcome = torch.from_numpy(data["outcome"].astype(np.float32)).to(device)
+        self.scalars = (
+            torch.from_numpy(data["scalars"].astype(np.int16)).to(device)
+            if "scalars" in data
+            else None
+        )
         self.score5 = (
             torch.from_numpy(data["score5"].astype(np.float32)).to(device)
             if "score5" in data
@@ -239,7 +260,8 @@ def evaluate(model: Nnue, t: Tensors, idx: Tensor, lam: float, batch: int = 1638
         for start in range(0, len(idx), batch):
             chunk = idx[start : start + batch]
             own, opp = t.features(chunk, None)
-            preds.append(model(own, opp, t.hand[chunk]))
+            scalars = None if t.scalars is None else t.scalars[chunk]
+            preds.append(model(own, opp, t.hand[chunk], scalars))
     score5 = None if t.score5 is None else t.score5[idx]
     return metrics(torch.cat(preds), t.score[idx], t.outcome[idx], lam, score5)
 
@@ -262,7 +284,7 @@ def _run_epoch(
         idx = perm[b * cfg.batch : (b + 1) * cfg.batch]
         sym = int(torch.randint(12, (1,), generator=gen, device=device)) if cfg.augment else None
         own, opp = t.features(idx, sym)
-        pred = model(own, opp, t.hand[idx])
+        pred = model(own, opp, t.hand[idx], None if t.scalars is None else t.scalars[idx])
         loss = ((win_prob(pred) - target(t.score[idx], t.outcome[idx], cfg.lam)) ** 2).mean()
         opt.zero_grad(set_to_none=True)
         loss.backward()
@@ -280,6 +302,12 @@ class TrainResult:
     best: Metrics
     baseline: Metrics
     epochs_run: int
+
+
+def _new_model(data: Data, meta: Meta, cfg: Config) -> Nnue:
+    if cfg.scalars and "scalars" not in data:
+        raise ValueError("Config.scalars needs data with scalars (hive-label --scalars)")
+    return Nnue(int(meta["num_features"]), cfg.hidden, cfg.l2, NUM_SCALARS if cfg.scalars else 0)
 
 
 def train(
@@ -309,7 +337,7 @@ def train(
     baseline = metrics(t.static[val_idx], t.score[val_idx], t.outcome[val_idx], cfg.lam, score5)
     log(f"baseline (static eval): {baseline}")
 
-    model = Nnue(int(meta["num_features"]), cfg.hidden, cfg.l2).to(device)
+    model = _new_model(data, meta, cfg).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     sched = torch.optim.lr_scheduler.ExponentialLR(opt, cfg.lr_gamma)
     gen = torch.Generator(device=device).manual_seed(cfg.seed)

@@ -23,7 +23,8 @@ Dataset layout (`np.savez_compressed`): `own`, `opp` int16 [N, 28] padded with -
 the baseline), `outcome` int8, `ply` int16, `game` int32, `random` bool, `opening` int64
 (hash of the game's first 4 moves), `source` int8 (depth the game was played at, 0 if not
 recorded), `meta` JSON (version, radius, num_features, depths, ...). Relabeled games
-(`hive-label --relabel`) add one int16 array per searched depth: `score3`, `score4`, ...
+(`hive-label --relabel`) add one int16 array per searched depth: `score3`, `score4`, ...,
+and with `--scalars` the strategy scalars, `scalars` uint8 [N, 12].
 """
 
 from __future__ import annotations
@@ -249,6 +250,11 @@ def encode_dataset(path: str, out: str, workers: int = 1, radius: int = RADIUS) 
         f"score{d}": np.array([p["scores"][str(d)] or 0 for p in ordered], dtype=np.int16)
         for d in depths
     }
+    with_scalars = sum("scalars" in p for p in ordered)
+    if with_scalars not in (0, len(ordered)):
+        raise ValueError(f"{path}: {with_scalars} of {len(ordered)} positions have scalars")
+    if with_scalars:
+        scores["scalars"] = np.array([p["scalars"] for p in ordered], dtype=np.uint8)
     meta = {
         "version": 3,
         "radius": radius,

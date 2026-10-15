@@ -165,6 +165,10 @@ class Engine:
         """Fork extension: the hand tuned static evaluation, side to move's perspective."""
         return int(self.cmd("eval")[0])
 
+    def scalars(self) -> list[int]:
+        """Fork extension: the 12 strategy scalars (see tocandira.weights), side to move first."""
+        return [int(x) for x in self.cmd("scalars")[0].split(",")]
+
     def close(self) -> None:
         """Ask the engine to exit, killing it if it does not."""
         try:

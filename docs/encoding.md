@@ -44,15 +44,34 @@ active per perspective (one per piece in Base+MLP). A position is encoded from b
 perspectives: `own` (side to move) and `opp`, plus 16 pieces in hand counts (side to
 move's 8 bugs first).
 
-## Possible next inputs
+## Strategy scalars
 
-What strong players attend to, per Ingersoll's *Play Hive Like a Champion* (three keys:
-mobility, tempo, strength; formations gate, door, ring, elbow, pocket; tactics pin, cover,
-block, fill, bug counting) and the KTH strategy comparison (defensive circling beats a
-naive attack): counts of movable bugs per side, pinned bugs, free hexes around each queen,
-placeable hexes per side, a beetle on or next to a queen. The queen relative features see
-the geometry of these; mobility needs move generation, so these would be a few dense
-scalars emitted by the engine at labeling time, an experiment arm after the first match.
+What strong players count by eye, per Ingersoll's *Play Hive Like a Champion* (mobility,
+tempo, strength; pins, gates, blocks) and the KTH strategy comparison (defensive circling
+beats a naive attack), and what the queen relative features cannot compute: whether a bug
+can move depends on the whole hive's connectivity and on the sliding rules. The engine
+computes 12 integers per position (`scalars.rs`, UHP command `scalars`), side to move first,
+then the opponent:
+
+| scalars | meaning | divided by |
+|---|---|---|
+| 0, 1 | bugs that can move (not pinned, not a crawler with no open slide; stacked bugs move) | 14 |
+| 2, 3 | pinned bugs (lifting them would split the hive) | 14 |
+| 4, 5 | free hexes around the queen, 6 before it is placed | 6 |
+| 6, 7 | immovable bugs next to the queen | 6 |
+| 8, 9 | empty hexes the side may place on (next to its bugs, next to no enemy bug) | 24 |
+| 10, 11 | queen covered by a bug on top | 1 |
+
+Movability uses the hand eval's exact definitions (the crawl rule, mosquito included, is
+shared code). As net inputs each scalar is divided by its maximum and clipped to 1 (in the
+engine: `value * 127 / max` rounded, clipped at 127), and they join the first hidden layer
+after both accumulators (`Linear(2H + 12, 32)`): 12 x 32 extra multiply-adds, accumulators
+and their incremental updates unchanged. Weight files with scalars are version 2. They cost
+about one hand evaluation per node (the cut vertex pass dominates).
+
+The engine is the only implementation (the Python board has no movement rules), so the
+values a net is trained on are the values it sees in search. `hive-label --relabel FILE
+--depths "" --scalars` adds them to relabeled games: one replay per game, no search.
 
 ## Symmetries
 
@@ -77,4 +96,5 @@ fresh engine (one thread, 16 MiB table, root moves in an order seeded by the pos
 searches each position at each depth, so the same position always gets the same score.
 The trainer's `target` picks one depth (`"d5"`) or the mean of several in win probability
 space (`"d45"`); holding out by `opening` keeps the depth 4 and depth 5 games that share an
-opening (same seeds) on the same side of the split.
+opening (same seeds) on the same side of the split. `scalars` (uint8 [N, 12]) holds the
+strategy scalars when the games carry them.

@@ -155,6 +155,7 @@ def test_encode_relabeled_games(tmp_path):
             "outcome": 0,
             "random": False,
             "scores": {"3": s3, "5": s5},
+            "scalars": [ply] * 11 + [200],
         }
 
     games = [
@@ -175,5 +176,8 @@ def test_encode_relabeled_games(tmp_path):
     assert data["score3"].tolist() == [40, 50, 41, 30]
     assert data["score5"].tolist() == [0, 55, 46, 35]
     assert data["source"].tolist() == [4, 4, 5, 0]
+    assert data["scalars"].dtype == np.uint8 and data["scalars"].shape == (4, 12)
+    assert data["scalars"][:, 0].tolist() == [4, 5, 4, 3]
+    assert data["scalars"][0, 11] == 200
     opening = data["opening"].tolist()
     assert opening[0] == opening[1] == opening[2] != opening[3]

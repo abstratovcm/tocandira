@@ -2,6 +2,32 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-14: what the strategy scalars cost
+
+`benches/nnue.rs`, mid game position (25 pieces), machine under load (load average ~6), so
+the ratios matter more than the times:
+
+| | per eval | vs hand eval |
+|---|---|---|
+| hand eval | 437 ns | 1.0x |
+| the 12 scalars alone | 437 ns | 1.0x |
+| net r6 h256, incremental | 548 ns | 1.25x |
+| same with scalars | 1.06 µs | 2.4x |
+| net r6 h128, incremental | 492 ns | 1.1x |
+| same with scalars | 1.02 µs | 2.3x |
+
+The scalars cost one hand evaluation; the first version counted placeable hexes with a
+neighbourhood check per candidate and cost 628 ns, now one marking pass and a popcount.
+With scalars a net evaluates at about half the speed. The speed work that took the net
+from 1.57 to 0.52 µs was worth about +100 Elo at 1 s/move, so the scalars have to buy more
+than that per node to win at equal time; the match vs the same net without them decides.
+The cut vertex pass dominates; it could become incremental later if the scalars earn
+their place.
+
+Adding the scalars to relabeled games (`--scalars`, one replay per game): 17,500
+positions/s on 14 workers, about 4 minutes for the 3.8M positions of the d4 and d5 games.
+The hand eval is unchanged by sharing the crawl rule: identical scores on 2,523 positions.
+
 ## 2026-10-14: a deterministic search, and labels as a function of the position
 
 Re-searching 40 depth 4 games (2,323 positions) at depth 4, one thread: 2.7% of the scores

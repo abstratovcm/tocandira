@@ -2,11 +2,17 @@
 
     hive-export runs/models/c/r6-lam1-h256/weights.npz   # -> weights.bin next to it
 
-The binary is what the Rust fork loads (`--nnue weights.bin`): "TOCA", u32 version 1, u32
-radius, u32 num_features, u32 hidden, u32 l2, f32 scale, then little endian float32 arrays
-in the order ft [num_features, hidden], hand_w [hidden, 16], hand_b [hidden],
-l1_w [l2, 2 * hidden], l1_b [l2], l2_w [l2, l2], l2_b [l2], out_w [l2], out_b [1].
-`evaluate` reproduces the net without torch, for cross checking the engine.
+The binary is what the Rust fork loads (`--nnue weights.bin`): "TOCA", u32 version, u32
+radius, u32 num_features, u32 hidden, u32 l2, f32 scale, (version 2 only: u32 number of
+strategy scalars), then little endian float32 arrays in the order ft [num_features, hidden],
+hand_w [hidden, 16], hand_b [hidden], l1_w [l2, 2 * hidden + scalars], l1_b [l2],
+l2_w [l2, l2], l2_b [l2], out_w [l2], out_b [1]. Nets without scalars are written as
+version 1. `evaluate` reproduces the net without torch, for cross checking the engine.
+
+Strategy scalars (the engine's `scalars` command, side to move first): bugs that can move,
+pinned bugs, free hexes around the queen, immovable bugs next to the queen, placeable
+hexes, queen covered; each for the side to move and the opponent. As net inputs they are
+divided by `SCALAR_MAX` and clipped to 1.
 """
 
 from __future__ import annotations
@@ -22,8 +28,9 @@ import numpy as np
 import numpy.typing as npt
 
 MAGIC = b"TOCA"
-VERSION = 1
 HEADER = "<4sIIIIIf"
+NUM_SCALARS = 12
+SCALAR_MAX = (14, 14, 14, 14, 6, 6, 6, 6, 24, 24, 1, 1)  # same as the engine's scalars.rs
 ORDER = ("ft", "hand_w", "hand_b", "l1_w", "l1_b", "l2_w", "l2_b", "out_w", "out_b")
 
 Array = npt.NDArray[np.float32]
@@ -39,6 +46,7 @@ class Weights:
     l2: int
     scale: float
     arrays: dict[str, Array]
+    scalars: int = 0  # strategy scalars fed to the first layer: 0 or NUM_SCALARS
 
     def shapes(self) -> dict[str, tuple[int, ...]]:
         """Expected shape of every array, in file order."""
@@ -47,7 +55,7 @@ class Weights:
             "ft": (self.num_features, h),
             "hand_w": (h, 16),
             "hand_b": (h,),
-            "l1_w": (l2, 2 * h),
+            "l1_w": (l2, 2 * h + self.scalars),
             "l1_b": (l2,),
             "l2_w": (l2, l2),
             "l2_b": (l2,),
@@ -71,6 +79,7 @@ def load_npz(path: str) -> Weights:
             l2=int(arrays["l1_w"].shape[0]),
             scale=float(d["scale"]),
             arrays=arrays,
+            scalars=int(arrays["l1_w"].shape[1]) - 2 * int(ft.shape[1]),
         )
 
 
@@ -86,10 +95,15 @@ def write_bin(w: Weights, path: str) -> None:
     for name, shape in w.shapes().items():
         if tuple(w.arrays[name].shape) != shape:
             raise ValueError(f"{name}: shape {w.arrays[name].shape}, expected {shape}")
+    if w.scalars not in (0, NUM_SCALARS):
+        raise ValueError(f"{w.scalars} scalars, expected 0 or {NUM_SCALARS}")
+    version = 2 if w.scalars else 1
     with open(path, "wb") as f:
         f.write(
-            struct.pack(HEADER, MAGIC, VERSION, w.radius, w.num_features, w.hidden, w.l2, w.scale)
+            struct.pack(HEADER, MAGIC, version, w.radius, w.num_features, w.hidden, w.l2, w.scale)
         )
+        if w.scalars:
+            f.write(struct.pack("<I", w.scalars))
         for name in ORDER:
             f.write(np.ascontiguousarray(w.arrays[name], dtype="<f4").tobytes())
 
@@ -99,10 +113,14 @@ def read_bin(path: str) -> Weights:
     with open(path, "rb") as f:
         buf = f.read()
     magic, version, radius, num_features, hidden, l2, scale = struct.unpack_from(HEADER, buf)
-    if magic != MAGIC or version != VERSION:
-        raise ValueError(f"{path}: not a version {VERSION} tocandira weights file")
-    w = Weights(radius, num_features, hidden, l2, scale, {})
+    if magic != MAGIC or version not in (1, 2):
+        raise ValueError(f"{path}: not a version 1 or 2 tocandira weights file")
     pos = struct.calcsize(HEADER)
+    scalars = 0
+    if version == 2:
+        (scalars,) = struct.unpack_from("<I", buf, pos)
+        pos += 4
+    w = Weights(radius, num_features, hidden, l2, scale, {}, scalars)
     for name, shape in w.shapes().items():
         n = int(np.prod(shape))
         w.arrays[name] = np.frombuffer(buf, dtype="<f4", count=n, offset=pos).reshape(shape)
@@ -112,7 +130,14 @@ def read_bin(path: str) -> Weights:
     return w
 
 
-def evaluate(w: Weights, own: list[int], opp: list[int], hand: list[int]) -> float:
+def scalar_inputs(scalars: list[int]) -> Array:
+    """Strategy scalars as the net's inputs: each divided by its SCALAR_MAX, clipped to 1."""
+    return np.minimum(np.asarray(scalars, np.float32) / np.asarray(SCALAR_MAX, np.float32), 1)
+
+
+def evaluate(
+    w: Weights, own: list[int], opp: list[int], hand: list[int], scalars: list[int] | None = None
+) -> float:
     """The net's score for the side to move, in score units (numpy reference)."""
     a = w.arrays
     h = np.asarray(hand, dtype=np.float32)
@@ -122,7 +147,7 @@ def evaluate(w: Weights, own: list[int], opp: list[int], hand: list[int]) -> flo
         total = a["ft"][features].sum(axis=0) if features else np.zeros(w.hidden, np.float32)
         return np.clip(total + a["hand_w"] @ hand_vec + a["hand_b"], 0, 1)
 
-    x = np.concatenate([acc(own, h), acc(opp, swapped)])
+    x = np.concatenate([acc(own, h), acc(opp, swapped), _scalars(w, scalars, scalar_inputs)])
     x = np.clip(a["l1_w"] @ x + a["l1_b"], 0, 1)
     x = np.clip(a["l2_w"] @ x + a["l2_b"], 0, 1)
     return float((a["out_w"] @ x + a["out_b"][0]) * w.scale)
@@ -133,7 +158,23 @@ WEIGHT_SCALE = 64
 WEIGHT_SHIFT = 6
 
 
-def evaluate_quantized(w: Weights, own: list[int], opp: list[int], hand: list[int]) -> float:
+def _scalars(w: Weights, scalars: list[int] | None, convert: Any) -> npt.NDArray[Any]:
+    if not w.scalars:
+        return np.asarray(convert([0] * NUM_SCALARS))[:0]  # empty, of the path's dtype
+    if scalars is None or len(scalars) != w.scalars:
+        raise ValueError(f"this net takes {w.scalars} scalars")
+    return np.asarray(convert(scalars))
+
+
+def _scalar_activations(scalars: list[int]) -> npt.NDArray[np.int64]:
+    # The engine's scalar_input: value * 127 / max, rounded half up, clipped at 127.
+    v, m = np.asarray(scalars, np.int64), np.asarray(SCALAR_MAX, np.int64)
+    return np.asarray(np.minimum((v * ACT_SCALE + m // 2) // m, ACT_SCALE), dtype=np.int64)
+
+
+def evaluate_quantized(
+    w: Weights, own: list[int], opp: list[int], hand: list[int], scalars: list[int] | None = None
+) -> float:
     """What the engine computes: int16 accumulators, int8 layer weights, same rounding.
 
     Rows and biases carry ACT_SCALE per unit, layer weights WEIGHT_SCALE per unit; activations
@@ -159,7 +200,9 @@ def evaluate_quantized(w: Weights, own: list[int], opp: list[int], hand: list[in
             total = total + q16(hand_w[:, slot] * min(int(hand_vec[slot]), 3), ACT_SCALE)
         return np.clip(total, 0, ACT_SCALE)
 
-    x = np.concatenate([acc(own, counts), acc(opp, swapped)])
+    x = np.concatenate(
+        [acc(own, counts), acc(opp, swapped), _scalars(w, scalars, _scalar_activations)]
+    )
     l1 = q8(a["l1_w"], WEIGHT_SCALE) @ x + q16(a["l1_b"], ACT_SCALE * WEIGHT_SCALE)
     x = np.clip(l1 >> WEIGHT_SHIFT, 0, ACT_SCALE)
     l2 = q8(a["l2_w"], WEIGHT_SCALE) @ x + q16(a["l2_b"], ACT_SCALE * WEIGHT_SCALE)
@@ -180,7 +223,8 @@ def main(argv: list[str] | None = None) -> int:
     write_bin(w, out)
     size = os.path.getsize(out) / 1e6
     print(
-        f"radius {w.radius}, {w.num_features} features, hidden {w.hidden} -> {out} ({size:.1f} MB)",
+        f"radius {w.radius}, {w.num_features} features, hidden {w.hidden}, {w.scalars} scalars"
+        f" -> {out} ({size:.1f} MB)",
         file=sys.stderr,
     )
     return 0
