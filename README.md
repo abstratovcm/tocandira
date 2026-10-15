@@ -1,5 +1,6 @@
 # tocandira
 
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/logo/tocandira-dark.svg"><img src="docs/logo/tocandira-light.svg" alt="tocandira logo" width="140" align="right"></picture>
 Hive engine: nokamute's search with a learned evaluation (named after the bullet ant; in
 Hive the ant is the piece that goes anywhere). Fork of
 [nokamute](https://github.com/edre/nokamute) by Eric Roshan Eisner (MIT).
@@ -35,8 +36,7 @@ nokamute"; speed and move generation are nokamute's, not ours.
 - `colab/`: two copies per round, one per Colab session: `01_generate_instance{0,1}`
   (self play), `01_relabel_instance{0,1}` (depths 3-5), `02_train_{a,b}` (a sweep each),
   `03_match_{a,b}` (match lists against the fork and the 1.0.3 reference).
-- `docs/`: [benchmarks](docs/benchmarks.md) (dated measurements and results),
-  [encoding](docs/encoding.md) (feature design and dataset layout).
+- `docs/`: dated [benchmarks](docs/benchmarks.md), [encoding](docs/encoding.md) design, `logo/`.
 - `runs/`: match records and datasets (gitignored).
 
 ## Setup
@@ -76,5 +76,4 @@ uv run mypy                                     # strict type check of tocandira
 uv run pytest -q                                # engine tests skip until engine/nokamute is built
 ```
 
-CI runs the same four on every push. Conventions for the README, docs and tests are in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+CI runs the same four on every push; conventions in [CONTRIBUTING.md](CONTRIBUTING.md).
