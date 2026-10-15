@@ -2,6 +2,23 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-15: what the speed work is worth, and why not lazy updates
+
+Same net (c), same evaluations, only the engine's speed differs: today's engine (layer
+kernel, feature table, accumulator stack; 1.6x on the 20 position benchmark) against the
+engine from before that work, 1 s/move, 400 games, 6 games at a time on the Ryzen.
+
+**57.4% [52.5, 62.1], +52 Elo [+17, +86]**, W218 D23 L159, median 42 plies. About two
+thirds of a doubling of speed, so roughly +75 Elo per doubling for this engine at 1 s/move
+(wide interval). A further 5-7% would be worth about +5 to +8 Elo.
+
+Lazy accumulator updates (compute an entry only when something reads it) were measured
+before building anything: an instrumented copy counted, on the 20 searches with net c,
+9,285,681 entries pushed, 8,496,957 evaluations (91% of the pushes), 225,800 entries
+never needed by any evaluation below them (2.4%) and 79,241 rebuilds of one perspective
+(0.9%). Almost every applied move leads to an evaluated position, so lazy updates could
+save at most ~0.3% of a search: not built.
+
 ## 2026-10-14: an accumulator stack, undo for free
 
 After the layer kernel, keeping the accumulators in step was 17% of a search with net c
