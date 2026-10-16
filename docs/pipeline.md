@@ -53,6 +53,19 @@ Policy:
 - `load_shards` keeps only the arrays every shard has: a target from one generation means
   training on that generation's shards.
 
+## Search options
+
+Search changes are opt-in (a flag or UHP option, default off), so the default search, the
+one labels are defined with, never changes by accident; `hive-label` never passes them.
+Matches and play use the options that won a timed match:
+
+| option | since | evidence |
+|---|---|---|
+| `--null-move-pruning` | 2026-10-16 | +38 [+4, +73] at 1 s/move, 400 games |
+
+Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspiration-window=50`
+(+10 [−24, +44]). A switch joins a label definition only at a deliberate generation change.
+
 ## Rules learned the hard way
 
 - Only one session encodes a given Drive folder at a time: two sessions encoding radius 6

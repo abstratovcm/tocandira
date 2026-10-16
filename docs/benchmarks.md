@@ -2,6 +2,28 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-16: nokamute's search switches, one of them broken
+
+nokamute has search features that are off by default (`--null-move-pruning`,
+`--quiet-search`, `--aspiration-window`). Each tested with the best scalars net, switch on
+vs off, same binary, 1 s/move, 6 games at a time on the Ryzen, SPRT [0, 20]:
+
+| switch | games | score | Elo |
+|---|---|---|---|
+| `--null-move-pruning` | 400 | 55.5% [50.6, 60.3] | **+38 [+4, +73]** |
+| `--quiet-search` (fixed, see below) | 48, stopped | 19.8% [11.0, 33.1] | −243 [−364, −122] |
+| `--aspiration-window=50` | 400 | 51.4% [46.5, 56.2] | +10 [−24, +44] |
+
+Null move pruning is a clear gain and is used in matches from now on. Quiescence never
+did anything before: the hook that lists noisy moves (moves of a piece just placed)
+returned early whenever the side to move's queen was placed, so after the opening it found
+no move, and before the queen it produced bug moves that are not yet legal. The same line
+is in nokamute 1.0.3. Fixed (it only runs with `--quiet-search`, so the default search and
+all labels are unchanged, byte identical on the 20 positions); with the fix, quiescence
+explores more nodes and takes about 5x longer at depth 5, because it generates every
+movement and keeps the placed piece's. At equal time that loses badly. Aspiration windows
+show no effect. Records in runs/matches/search-*-vs-base-1s.jsonl.
+
 ## 2026-10-15: the cache lookup waits for memory; prefetch
 
 With the evaluation cache in place, about 10% of a search sat on one line: reading the
