@@ -69,6 +69,7 @@ Matches and play use the options that won a timed match:
 |---|---|---|
 | `--null-move-pruning` | 2026-10-16 | +38 [+4, +73] at 1 s/move, 400 games |
 | `--lmr` | 2026-10-16 | +20 [-5, +44] on top of null move, 800 games (best estimate, borderline) |
+| `--partial-iteration` | 2026-10-16 | +50 [+15, +86] on top of both, SPRT stopped at 376 games |
 
 Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspiration-window=50`
 (+10 [−24, +44]). A switch joins a label definition only at a deliberate generation change.
@@ -78,6 +79,9 @@ Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspirat
 - Only one session encodes a given Drive folder at a time: two sessions encoding radius 6
   at once left byte identical copies that leaked the holdout (2026-10-14). `load_shards`
   now skips duplicate files.
+- Only one session creates a Drive folder: two generate instances creating `n4j` at once
+  made two folders of that name, each with half the shards (2026-10-16). In the notebooks
+  instance 0 creates the folders and instance 1 waits for them.
 - The holdout is by opening (same seeds give the same openings across game sets).
 - Pearson does not rank nets: smaller nets and the cheap scalars looked equal offline and
   differed by 40-110 Elo per node. The depth 5 screen decides, the timed match confirms.

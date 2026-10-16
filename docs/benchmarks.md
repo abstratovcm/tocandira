@@ -2,6 +2,21 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-16: the unfinished iteration decides the move: +50
+
+At 1 s per move 43% of each move's nodes went to the iteration the deadline interrupts,
+and the search threw it away. With `--partial-iteration` (off by default) a timed out
+iteration still decides the move: the best of the root moves it finished, when the
+previous best, which it searches first, is among them; otherwise the previous depth's
+move, as before. The reported score and principal variation stay those of the last
+finished depth. Byte identical with the switch off, and with it on at fixed depth.
+
+`j/n4-net5-s0` with `--null-move-pruning --lmr` on both sides, switch on vs off, same
+binary, 1 s per move, 6 games at a time on the Ryzen, SPRT [0, 20]: **57.2% [52.1, 62.1],
++50 [+15, +86]**, W189 D52 L135, stopped at 376 games with H1 accepted. 62% as white and
+52% as black, median 53 plies, both sides 0.84 s per move, no forfeits. Used in matches from
+now on. Records in runs/matches/search-pi-vs-base-1s.jsonl.
+
 ## 2026-10-16: build flags, and where the time goes at 1 s/move
 
 The 20 position benchmark (`search depth 5`, one thread), three runs each, interleaved,
