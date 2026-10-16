@@ -2,6 +2,47 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-16: build flags, and where the time goes at 1 s/move
+
+The 20 position benchmark (`search depth 5`, one thread), three runs each, interleaved,
+byte identical output for the hand eval, net c and `j/n4-net5-s0` in every build:
+
+| build | hand eval | net c | `j/n4-net5-s0` |
+|---|---|---|---|
+| local default (`cargo build --release`) | 8.44-8.58 s | 7.44-7.53 s | 7.32-7.37 s |
+| LTO, one codegen unit (as the notebooks build) | 8.16-8.20 s | 6.99-7.19 s | 7.10-7.21 s |
+| same plus `-C target-cpu=x86-64-v3` | 8.17-8.22 s | 7.18-7.32 s | 7.05-7.16 s |
+
+The default build has no `popcnt` instruction (every `count_ones` is a bit sequence), but
+hardware popcount changes nothing measurable; not adopted. LTO is worth 2-5% and the
+notebooks already use it; local builds don't.
+
+Profile of `j/n4-net5-s0` with `--null-move-pruning --lmr` at 1 s per move on the same 20
+positions (`perf record -e cycles:u`, release build with debug info, no LTO): the move
+ordering sorts are about 18% in total (the stable sort by history in `CounterMoves::reorder`,
+about 72 moves per node), `scalars_with` 12.5%, the pin search 11.4%, `generate_walk_all`
+7.6%, a thread local access 6.7%, the accumulator update 6.3%, the layer kernel 5.0%. The
+searches reach depth 6 to 8; on average 43% of each move's nodes (median 45%, 0 to 91%)
+belong to the unfinished last iteration, which the search discards at the deadline.
+
+The history sort: most moves have no cutoff in the history table, so a stable sort leaves
+them last in their current order. `CounterMoves::reorder` now moves the counted ones to the
+front (order kept) and sorts only those; a unit test checks it against the stable sort.
+Byte identical output on every workload below. LTO builds, three runs each, interleaved; the
+games workload replays two match games in one engine (64 searches at depth 5, the history
+kept across moves, as in a match):
+
+| workload | before | after | |
+|---|---|---|---|
+| 20 positions, hand eval | 8.14-8.29 s | 7.93-8.02 s | -2.7% |
+| 20 positions, `j/n4-net5-s0` | 6.99-7.17 s | 6.88-6.92 s | -2.8% |
+| 2 games, `j/n4-net5-s0` | 9.83-9.93 s | 9.40-9.64 s | -3.2% |
+| 2 games, `j/n4-net5-s0`, `--null-move-pruning --lmr` | 4.20-4.22 s | 3.84-3.88 s | **-8.4%** |
+
+About +9 Elo at match conditions by the measured value of speed. Sorting with cached keys
+(`sort_by_cached_key`) was slower in every row. The fork's release profile now sets LTO and
+one codegen unit, so local builds match the notebooks'.
+
 ## 2026-10-16: the generation 1 candidate at equal time: +433 over nokamute 1.0.3
 
 `j/n4-net5-s0` (trained on net search labels only, previous entry) at 1 s per move on Colab
