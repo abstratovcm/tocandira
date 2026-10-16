@@ -2,6 +2,29 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-16: late move reductions, history ordering
+
+Same setup as the search switches (best scalars net, 1 s/move, same binary, 6 games at a
+time, on vs off), now with null move pruning on both sides.
+
+| change | games | score | Elo |
+|---|---|---|---|
+| LMR, every move after the 3rd at depth >= 3, scout 2 plies shallower | 400 | 50.6% [45.7, 55.5] | +4 [-30, +38] |
+| LMR, but never moves next to a queen or of a queen | 400 + 400 | 52.8% [49.3, 56.3] | **+20 [-5, +44]** |
+
+The reductions cut the nodes at depth 5 by 2.3x (blunt) and 1.8x (with the exception),
+so at equal time the search goes deeper; the blunt version gave that back by missing
+queen tactics. The tactical exception is `Game::reducible`: a piece move that starts or
+ends next to a placed queen, or moves a queen, is searched at full depth (placements can
+never touch the enemy queen). Its two halves (seeds 1 and 2) agree within one Elo (+20,
++19); the 800 game interval touches zero, so it is adopted as the best estimate, not a
+proven gain. `--lmr` is used in matches from now on.
+
+The existing history table (one count per cutoff, moves indexed by hexes cut to 7 bits)
+was tried with a mixed full index and depth squared weights: 2-4% fewer nodes to depth 5
+over the 20 positions, the two changes together no better than either alone. Too small to
+measure in games; not kept.
+
 ## 2026-10-16: nokamute's search switches, one of them broken
 
 nokamute has search features that are off by default (`--null-move-pruning`,

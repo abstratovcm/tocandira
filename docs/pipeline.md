@@ -62,6 +62,7 @@ Matches and play use the options that won a timed match:
 | option | since | evidence |
 |---|---|---|
 | `--null-move-pruning` | 2026-10-16 | +38 [+4, +73] at 1 s/move, 400 games |
+| `--lmr` | 2026-10-16 | +20 [-5, +44] on top of null move, 800 games (best estimate, borderline) |
 
 Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspiration-window=50`
 (+10 [−24, +44]). A switch joins a label definition only at a deliberate generation change.
