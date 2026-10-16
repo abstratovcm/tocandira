@@ -2,6 +2,26 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-16: the generation 1 candidate at equal time: +433 over nokamute 1.0.3
+
+`j/n4-net5-s0` (trained on net search labels only, previous entry) at 1 s per move on Colab
+(v6e-1), the fork with `--null-move-pruning --lmr`, engine 372b572:
+
+| match | games | score | Elo |
+|---|---|---|---|
+| vs `i/d5-h128-l16-s`, its labeler (same binary, same switches) | 800 | 72.8% [69.6, 75.7] | **+171 [+144, +198]** |
+| **vs nokamute 1.0.3** | 800 | **92.4% [90.3, 94.0]** | **+433 [+388, +479]** |
+
+Against its labeler: W547 D70 L183, 79% as white and 66% as black, median 46 plies, both
+sides 0.80-0.81 s per move. The student beats its teacher by much more than the screens
+against the fork suggested (+370 against +315 per node): the same compression as the
+previous entry, so between nets the head to head is the measure. Against 1.0.3: W728 D22
+L50 (3 rules disagreements, 1 ply cap), 94% as white and 90% as black, median 36 plies,
+0.74 and 0.78 s per move. No forfeits or illegal moves.
+
+The +433 combines the new evaluation and the two search switches (+38 and +20 measured
+before); the +171 against the previous best is the evaluation alone, at equal search.
+
 ## 2026-10-16: net search labels against hand search labels, and more data
 
 The n4 games: 60,000 self play games of the best scalars net (`i/d5-h128-l16-s`) at depth 4,
