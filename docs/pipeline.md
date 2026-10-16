@@ -11,7 +11,7 @@ How a round goes, what a label is, and the rules learned so far. Measured number
 | 2. labels | `hive-label --relabel <games> --depths 3,4,5 [--nnue <net> --nnue-depths 5]` | `colab/01_relabel_instance{0,1}` | ~6-8 h per 2M positions per label kind, two v6e-1 |
 | 3. scalars | `hive-label --relabel <labeled> --depths "" --scalars`, then `hive-encode --radius 6` | local | ~5 min per 4M positions |
 | 4. training | `hive-train <npz folder> <out> target=d5 hidden=128 l2=16 scalars=true lam=1.0 patience=5 max_epochs=60` | local GPU (ROCm) | ~5 s per epoch per 4M positions |
-| 5. screen | `hive-tournament --a "cmd=<fork> --nnue <net>,depth=5" --b "cmd=<fork>,depth=5" --games 400` | local, 14 workers | ~10 min |
+| 5. screen | `hive-tournament --a "cmd=<fork> --nnue <net>,depth=5" --b "cmd=<fork>,depth=5" --games 400` | local, 14 workers | ~7 min |
 | 6. timed matches | `hive-tournament ... seconds=1 ... --games 800` | `colab/03_match_{a,b}` | ~30 min per 800 games on a v6e-1 |
 
 Generation, labels and matches are CPU work (one search per core): the v6e-1 runtimes are
@@ -40,15 +40,21 @@ A generation is one frozen labeler: engine commit, net file (sha1), depth.
 | generation | labeler | data |
 |---|---|---|
 | 0 | nokamute's hand eval, depths 3, 4, 5 | d4 and d5 games (3.8M positions), n4 games |
-| 1 (candidate) | net `i/d5-h128-l16-s`, depth 5 (`score_net5`) | n4 games (net self play, seeds 3000+) |
+| 1 (since 2026-10-16) | net `i/d5-h128-l16-s`, depth 5 (`score_net5`) | n4 games (net self play, seeds 3000+, 3.1M), n4j (seeds 4000+, played by `j/n4-net5-s0`) |
 
 Policy:
 - Never relabel history. A round labels only its own new positions, with the current
   generation: constant cost per round, whatever the total.
 - Old data is retired, not relabeled: train on a window of recent data weighted toward the
   newest generation; older generations fall out of the window.
+- A new generation fills its window with new games, not relabeled old ones: playing the
+  games costs little next to labeling them (about 1 h against 12-15 h for 3.8M positions on
+  two v6e-1), and the positions come from the current net's play.
+- Labels of the current generation only: generation 1 relabels with `DEPTHS = ""` and the
+  net. Hand eval depths belong on the small reference set.
 - A new generation only at a milestone (a new net clearly beats the labeler at equal
-  time) and after an A/B test: same positions, both label kinds, two nets, screens.
+  time) and after an A/B test: same positions, both label kinds, two nets per label kind
+  (two training seeds), screens, then a head to head of the best of each.
 - A small fixed reference set may be relabeled by each generation, to compare them.
 - `load_shards` keeps only the arrays every shard has: a target from one generation means
   training on that generation's shards.
@@ -75,6 +81,11 @@ Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspirat
 - The holdout is by opening (same seeds give the same openings across game sets).
 - Pearson does not rank nets: smaller nets and the cheap scalars looked equal offline and
   differed by 40-110 Elo per node. The depth 5 screen decides, the timed match confirms.
+- Training noise: the same recipe with another seed moves a screen by 24-36 Elo
+  (2026-10-16). A difference of that size between two single trainings is not a result.
+- The screen against the fork compresses at 85-90%: two nets at +370 and +392 there were 70
+  Elo apart head to head (2026-10-16). Between top candidates, play them against each other
+  at depth 5.
 - No timed match on an engine that is about to change: finish the speed work first, then
   measure once. Fixed depth screens do not depend on speed.
 - Speed is worth about +75 Elo per doubling at 1 s/move (measured with net c).

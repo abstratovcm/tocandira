@@ -2,6 +2,48 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-16: net search labels against hand search labels, and more data
+
+The n4 games: 60,000 self play games of the best scalars net (`i/d5-h128-l16-s`) at depth 4,
+seeds 3000+, 3,146,302 positions, 49,519 openings (8,989 shared with the d4 and d5 games).
+Every position labeled twice on Colab: the hand eval's search at depths 3, 4 and 5, and the
+net's own search at depth 5 (`score_net5`, labeler sha1 deac2814). On the 91% of positions
+that neither search finds forced, the two depth 5 labels correlate 0.64, and the net's is
+4x wider (std 324 against 79; the d4 and d5 games give 89) with the opposite side to move
+offset (-36 against +36). The forced positions are the same for both (1 in 70,000 differs).
+
+Nets of the same recipe (hidden 128, l2 16, 12 scalars, lambda 1.0, patience 5), each
+screened at depth 5 against the fork with the hand eval, 400 games, the openings of every
+earlier screen. A and B train on the same positions with the same holdout; s0 and s1 are two
+training seeds (the seed also picks the holdout).
+
+| net | positions | target | Pearson vs hand d5 | Elo at depth 5 vs fork |
+|---|---|---|---|---|
+| `i/d5-h128-l16-s` (reference) | d4 + d5, 3.8M | hand d5 | 0.721 | +315 [+266, +364] |
+| A: n4-d5-s0 | n4, 3.1M | hand d5 | 0.753 | +282 [+236, +327] |
+| A: n4-d5-s1 | n4, 3.1M | hand d5 | 0.760 | +246 [+203, +289] |
+| B: n4-net5-s0 | n4, 3.1M | net5 | 0.733 | +370 [+315, +425] |
+| B: n4-net5-s1 | n4, 3.1M | net5 | 0.738 | +346 [+294, +398] |
+| all-d5 | d4 + d5 + n4, 6.9M | hand d5 | 0.755 | +392 [+334, +449] |
+
+Head to head at depth 5, 400 games, all-d5 against n4-net5-s0: 40.2% [35.6, 45.1], **-69
+[-103, -34]** plain, and 40.1% [35.4, 45.0], -70 [-104, -35] with `--null-move-pruning
+--lmr` on both sides. No forfeits or illegal moves in any of these games.
+
+Readings. On the same positions the net's labels beat the hand eval's by about 94 Elo per
+node (both seeds, +88 and +100). The net trained on them also beats the net with hand labels
+on twice the data, head to head by 70 Elo, with and without the search switches; against the
+fork the two looked level (+370, +392): at 85-90% the screen against the fork compresses, and
+only a head to head separates the best candidates. Retraining with another seed moved a
+screen by 24-36 Elo, the first measure of training noise in play; single seed differences of
+that size in earlier tables are within it. The Pearson columns rank nothing here: B is
+measured against labels it was not trained on, and on n4 positions the static eval alone
+reaches 0.72 against the hand eval's depth 5 (0.33 on the d4 and d5 holdout) and 0.79-0.80
+against the net's.
+
+Decision: label generation 1 starts, its labeler the net `i/d5-h128-l16-s` at depth 5, kept
+frozen; n4-net5-s0 is the new candidate for the timed matches and plays the next game set.
+
 ## 2026-10-16: late move reductions, history ordering
 
 Same setup as the search switches (best scalars net, 1 s/move, same binary, 6 games at a
