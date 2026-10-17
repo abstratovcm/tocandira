@@ -70,9 +70,10 @@ Matches and play use the options that won a timed match:
 | `--null-move-pruning` | 2026-10-16 | +38 [+4, +73] at 1 s/move, 400 games |
 | `--lmr` | 2026-10-16 | +20 [-5, +44] on top of null move, 800 games (best estimate, borderline) |
 | `--partial-iteration` | 2026-10-16 | +50 [+15, +86] on top of both, SPRT stopped at 376 games |
+| `--killers` | 2026-10-16 | +25 [+1, +49] on top of the three, 800 games |
 
 Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspiration-window=50`
-(+10 [−24, +44]). A switch joins a label definition only at a deliberate generation change.
+(+10 [−24, +44]), `--lmr-scale=2.5` (+7 [−18, +31]), `--root-pvs` (+5 [−19, +29]). A switch joins a label definition only at a deliberate generation change.
 
 ## Rules learned the hard way
 

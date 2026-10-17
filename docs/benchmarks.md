@@ -2,6 +2,30 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-16: a search round: LMR table, ordering by the net, killers, root window
+
+Each idea is an option, off by default (byte identical output with it off on the 20
+positions and on 2 match games replayed in one engine with the existing switches). Each
+was matched against the best set so far: `j/n4-net5-s0`, same binary on both sides, 1 s per
+move, 6 games at a time, SPRT [0, 20], up to 800 games. Nodes are to depth 6 on the 20
+positions with the best set of the time.
+
+| option | nodes to depth 6 | match | result |
+|---|---|---|---|
+| `--lmr-scale=2.5`: reduction ln(depth) ln(index + 1) / 2.5, at least 1 | -20% (6.70 -> 6.95 plies mean depth at 1 s) | 800 games, 50.9% [47.5, 54.4] | +7 [-18, +31], off |
+| ordering by the net (children of nodes with depth ≥ 2, 3 or 4 sorted by their evaluation; all moves, or only those without history or countermove) | -7.5% at best, but 8-19% more time; all moves from depth 3: +8% nodes | none: time to depth did not fall | dropped |
+| `--killers`: two per depth left, after the table move | -3.5% | 800 games, 53.6% [50.2, 57.1] | **+25 [+1, +49]**, on |
+| `--root-pvs`: null window scout for root moves after the first (with killers) | -14% | 800 games, 50.7% [47.3, 54.2] | +5 [-19, +29], off |
+
+The LMR table searches about a quarter ply deeper at 1 s and loses that back in what the
+larger reductions miss; kept as an option to retest when ordering improves. The net's
+evaluation of a child orders worse than the cutoff history and countermove it would
+override, and on the moves without them it saves fewer nodes than its evaluations cost.
+Killers are a small node saving and a gain in play at the edge of the interval, like LMR.
+The root window saves nodes only at the root iteration's later moves, and the partial
+iteration already turns most of an interrupted root into a decision: no measurable gain.
+Records in runs/matches/search-{lmr25-vs-lmr,killers-vs-base,rootpvs-vs-base}-1s.jsonl.
+
 ## 2026-10-16: the unfinished iteration decides the move: +50
 
 At 1 s per move 43% of each move's nodes went to the iteration the deadline interrupts,
