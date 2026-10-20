@@ -2,6 +2,91 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-18: which positions to train on, and the outcome blend
+
+On generation 1 (n4 + n4j, 7,487,829 positions, target net5). Where `k/g1-net5-s1` errs on
+its holdout (380,220 positions, loss 0.0059): ply 0-10 loss 0.0001 (unforced Pearson 0.883),
+10-20 0.0003 (0.876), 20-40 0.0054 (0.879), 40-70 0.0120 (0.858), 70+ 0.0085 (0.843); forced
+positions (0% of the opening, 21% of ply 40-70) cost 0.018-0.037 each. The opening is
+learned; the error is in the middle game and in the wins the search can see and the
+evaluation cannot.
+
+Surprise, `|wp(i's evaluation) - wp(net5)|`, with the labeler `i/d5-h128-l16-s` (it never saw
+these positions): mean 0.071, median 0.040, 90th percentile 0.185; forced 0.180 against
+unforced 0.060; with a queen at 2 free hexes or fewer (49.5% of positions) 0.101 against
+0.041. The top half holds 5% of the positions of ply 0-10 and 64-69% of ply 20-70.
+
+Equal halves (3.74M each), two seeds, head to head at depth 5, 400 games each, no forfeits:
+
+| comparison | seed 0 | seed 1 |
+|---|---|---|
+| most surprising half vs a random half | +13 [-21, +47] | +20 [-14, +54] |
+| least surprising half vs a random half | -22 [-56, +12] | -56 [-91, -22] |
+| lambda 0.9 vs 1.0 (all positions, same seed) | +68 [+33, +102] | +18 [-16, +52] |
+| `l/lam09-s0` vs `k/g1-net5-s1` | +41 [+7, +75] | |
+
+Dropping the volatile half, as Stockfish's trainer drops non-quiet positions, loses here:
+the net's errors are where the evaluation moves with depth. The surprising half edges a
+random half in both seeds; oversampling it on the full data is the next test. Blending the
+outcome back in (lambda 0.9) is the larger and cheaper gain; `l/lam09-s0` is the new
+candidate for the timed matches.
+
+## 2026-10-18: reverse futility pruning: +67
+
+Nodes near the leaves searched every move, about 72 per node. An instrumented copy counted,
+on the 20 positions to depth 6 with `j/n4-net5-s0` and the four match switches, how often
+the net's evaluation of a node was already far from the window, and what the full search
+then returned:
+
+| depth left | nodes | eval - 100 x depth ≥ beta (null window) | then failed high | eval + 100 x depth ≤ alpha | then failed low |
+|---|---|---|---|---|---|
+| 1 | 1,055,478 | 445,969 | 99.92% | 37,795 | 85% |
+| 2 | 70,611 | 20,822 | 99.4% | 5,462 | 92% |
+| 3 | 15,153 | 1,297 | 98.4% | 337 | 32% |
+
+Margins 200 and 300 fire less and are barely more reliable. Futility on the low side fires
+rarely and is often wrong: not built. `--rfp=<margin>` (off by default, byte identical
+off): at null window nodes with at most 3 plies left, after the table check and before
+generating moves, return the evaluation when it beats beta by the margin per ply left.
+Margin 100: 27% fewer nodes and 13% less time to depth 6 (200: 15% and 5%); at 1 s per move
+the mean depth reached goes from 6.70 to 7.55 (200: 7.50), some positions to 9 and 10.
+
+Match, `--rfp=100` on top of the four switches vs the four, `j/n4-net5-s0`, same binary,
+1 s per move, 6 games at a time, SPRT [0, 20]: **59.6% [53.2, 65.6], +67 [+22, +112]**,
+W114 D52 L69, H1 accepted at 235 games; 63% as white, 56% as black, median 59 plies, both
+sides 0.85 s per move, no forfeits. Used in matches from now on.
+
+## 2026-10-17: generation 1 on 7.5M positions: a small gain, and why
+
+The n4j games: 76,000 self play games of `j/n4-net5-s0` at depth 4, seeds 4000+, 4,341,527
+positions, labeled on Colab with generation 1 only (`score_net5` by `i/d5-h128-l16-s`,
+sha1 deac2814): forced 8.6%, unforced mean -19 and std 318 (n4: 9.3%, -36, 324). With n4,
+generation 1 has 7,487,829 positions. Two nets of the usual recipe (hidden 128, l2 16, 12
+scalars, lambda 1.0, target net5), seeds 0 and 1, holdout by opening (376,054 and 380,220
+positions), 8 s per epoch, best epochs 33 and 39; 400 games each at depth 5:
+
+| net | vs fork | head to head vs `j/n4-net5-s0` (n4 only, 3.1M) |
+|---|---|---|
+| `k/g1-net5-s0` | 92.6% [89.6, 94.8], +440 [+375, +504] | 49.5% [44.6, 54.4], -3 [-37, +31] |
+| `k/g1-net5-s1` | 93.0% [90.1, 95.1], +449 [+383, +516] | 56.6% [51.7, 61.4], **+46 [+12, +81]** |
+
+About +20 per node on average for 2.4x the data, against +128 when the hand label data went
+from 3.1M to 6.9M; the two seeds differ by 49 in the head to head. No forfeits.
+
+Why so little. Not repetition: n4j is as varied as the other sets (96.5% distinct positions;
+d4 96.6%, d5 98.8%, n4 97.4%) and shares 0.9% of its positions with n4 (d5 shared 4.6% with
+d4). But `j/n4-net5-s0`, which never saw n4j, already predicts its labels almost as well as
+those of its own holdout: Pearson 0.816 and loss 0.0070 on all of n4j, 0.836 and 0.0066 on
+the n4 holdout; the nets trained on both reach about 0.84 on theirs. So n4j is mostly more
+of what the net already handles, from the same labeler. The hand label gain came from
+mixing two sources (hand eval games and net games), not from the count. What is left is the
+labeler (every label is `i/d5-h128-l16-s`'s depth 5 search, and the students now imitate it
+well) or the net's capacity. A hidden 256 net on the same data and holdout (seed 0) fits no
+better than hidden 128 (loss 0.0060 both, Pearson 0.847 against 0.845, best epoch 23 against
+54) and plays no better per node: 48.4% [43.5, 53.3], -11 [-45, +23] head to head against
+`k/g1-net5-s1` at depth 5, 400 games. So the limit is the labeler: the next step is a
+generation 2 labeler, stronger than `i/d5-h128-l16-s`, on new games.
+
 ## 2026-10-16: a search round: LMR table, ordering by the net, killers, root window
 
 Each idea is an option, off by default (byte identical output with it off on the 20

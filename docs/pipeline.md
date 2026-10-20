@@ -10,7 +10,7 @@ How a round goes, what a label is, and the rules learned so far. Measured number
 | 1. self play | `hive-label --games ... --depth 4 [--engine-options "cmd=<fork> --nnue <net>"]` | `colab/01_generate_instance{0,1}` | ~1 h per 60k games on two v6e-1 |
 | 2. labels | `hive-label --relabel <games> --depths 3,4,5 [--nnue <net> --nnue-depths 5]` | `colab/01_relabel_instance{0,1}` | ~6-8 h per 2M positions per label kind, two v6e-1 |
 | 3. scalars | `hive-label --relabel <labeled> --depths "" --scalars`, then `hive-encode --radius 6` | local | ~5 min per 4M positions |
-| 4. training | `hive-train <npz folder> <out> target=d5 hidden=128 l2=16 scalars=true lam=1.0 patience=5 max_epochs=60` | local GPU (ROCm) | ~5 s per epoch per 4M positions |
+| 4. training | `hive-train <npz folder> <out> target=net5 hidden=128 l2=16 scalars=true lam=0.9 patience=5 max_epochs=60`, two seeds | local GPU (ROCm) | ~5 s per epoch per 4M positions |
 | 5. screen | `hive-tournament --a "cmd=<fork> --nnue <net>,depth=5" --b "cmd=<fork>,depth=5" --games 400` | local, 14 workers | ~7 min |
 | 6. timed matches | `hive-tournament ... seconds=1 ... --games 800` | `colab/03_match_{a,b}` | ~30 min per 800 games on a v6e-1 |
 
@@ -40,7 +40,7 @@ A generation is one frozen labeler: engine commit, net file (sha1), depth.
 | generation | labeler | data |
 |---|---|---|
 | 0 | nokamute's hand eval, depths 3, 4, 5 | d4 and d5 games (3.8M positions), n4 games |
-| 1 (since 2026-10-16) | net `i/d5-h128-l16-s`, depth 5 (`score_net5`) | n4 games (net self play, seeds 3000+, 3.1M), n4j (seeds 4000+, played by `j/n4-net5-s0`) |
+| 1 (since 2026-10-16) | net `i/d5-h128-l16-s`, depth 5 (`score_net5`) | n4 games (net self play, seeds 3000+, 3.1M), n4j (seeds 4000+, played by `j/n4-net5-s0`, 4.3M); 7.5M in all |
 
 Policy:
 - Never relabel history. A round labels only its own new positions, with the current
@@ -71,6 +71,7 @@ Matches and play use the options that won a timed match:
 | `--lmr` | 2026-10-16 | +20 [-5, +44] on top of null move, 800 games (best estimate, borderline) |
 | `--partial-iteration` | 2026-10-16 | +50 [+15, +86] on top of both, SPRT stopped at 376 games |
 | `--killers` | 2026-10-16 | +25 [+1, +49] on top of the three, 800 games |
+| `--rfp=100` | 2026-10-18 | +67 [+22, +112] on top of the four, SPRT stopped at 235 games |
 
 Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspiration-window=50`
 (+10 [−24, +44]), `--lmr-scale=2.5` (+7 [−18, +31]), `--root-pvs` (+5 [−19, +29]). A switch joins a label definition only at a deliberate generation change.
@@ -86,6 +87,11 @@ Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspirat
 - The holdout is by opening (same seeds give the same openings across game sets).
 - Pearson does not rank nets: smaller nets and the cheap scalars looked equal offline and
   differed by 40-110 Elo per node. The depth 5 screen decides, the timed match confirms.
+- Train on every position: keeping only the half whose evaluation changes least with depth
+  (as Stockfish filters non-quiet positions) loses ~40 Elo per node (2026-10-18); the
+  volatile half is where the net learns.
+- Blend in the outcome: lambda 0.9 beats 1.0 by ~43 per node (two seeds, 2026-10-18). Pearson
+  had favoured 1.0; judge training settings by games.
 - Training noise: the same recipe with another seed moves a screen by 24-36 Elo
   (2026-10-16). A difference of that size between two single trainings is not a result.
 - The screen against the fork compresses at 85-90%: two nets at +370 and +392 there were 70
