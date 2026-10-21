@@ -20,6 +20,20 @@ options in [docs/pipeline.md](docs/pipeline.md)) with the tocandira evaluation v
 Until step 2, every claim reads "nokamute's search with the tocandira evaluation vs
 nokamute"; speed and move generation are nokamute's, not ours.
 
+## Lineage
+
+The engine answers UHP's `info` as `tocandira 0.1.0 (nokamute <version>)`: built on
+[nokamute](https://github.com/edre/nokamute), whose MIT notice it keeps.
+
+| nokamute's (Eric Roshan-Eisner) | tocandira's |
+|---|---|
+| rules, board, move generation, notation, UHP, perft | learned evaluation (`src/nnue.rs`) and the 12 strategy scalars (`src/scalars.rs`) |
+| the search framework (`minimax`, vendored from his crate) | search additions, each an option measured in matches: partial iterations, killers, reverse futility, LMR exceptions, a seeded root order ([docs/pipeline.md](docs/pipeline.md)) |
+| the hand tuned evaluation, generation 0's labeler | labels, data, training, the nets, and everything in this repository |
+
+By lines, about a quarter of the engine's Rust (2026-10-21); most of the measured strength
+comes from the evaluation.
+
 ## Layout
 
 - `engine/nokamute/`: the engine fork (submodule, branch `tocandira`): the `search` UHP
