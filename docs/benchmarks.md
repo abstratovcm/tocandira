@@ -2,6 +2,43 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-20: the new candidate at equal time: +650 over nokamute 1.0.3
+
+`l/lam09-s0` (generation 1, 7.5M positions, lambda 0.9) at 1 s per move on Colab (v6e-1),
+engine 13b0f1f with `--null-move-pruning --lmr --partial-iteration --killers --rfp=100`:
+
+| match | games | score | Elo |
+|---|---|---|---|
+| vs `j/n4-net5-s0`, same binary and switches | 800 | 63.6% [60.2, 66.8] | **+97 [+72, +122]** |
+| **vs nokamute 1.0.3** | 800 | **97.7% [96.4, 98.5]** | **+650 [+571, +730]** |
+
+Against `j`: W467 D83 L250, 73% as white and 55% as black, median 51 plies, 0.82 and 0.83 s
+per move; the search is the same on both sides, so this is the evaluation alone, and it
+agrees with the depth 5 chain (+46 for `k/g1-net5-s1`, +41 more for `l/lam09-s0`). Against
+1.0.3: W778 D7 L15 (3 rules disagreements), 99% as white and 96% as black, median 35 plies,
+0.72 and 0.77 s per move. No forfeits.
+
+From +433 (2026-10-16) to +650: the new evaluation, partial iterations, killers and reverse
+futility pruning. At 97.7% the scale saturates (the interval is 160 Elo wide); progress is
+measured against our own previous best from here, and 1.0.3 at equal time stops being a
+precise yardstick.
+
+## 2026-10-20: surprise weighting hurts; lambda 0.8 ties 0.9
+
+All 7.5M generation 1 positions, two seeds, head to head at depth 5 against the lambda 0.9
+net of the same seed (`l/lam09-s0`, `l/lam09-s1`), 400 games each, no forfeits.
+
+Surprise weighting, KataGo style: each position repeated by its weight
+`0.5 + 0.5 * surprise / mean surprise` (whole copies plus a random one for the fraction; mean
+1, 7,486,679 rows for 7,487,829 positions, the most surprising up to 7.5 times), lambda 0.9:
+**-47 [-81, -13]** and **-72 [-107, -38]**. The weighted nets stop at epochs 13 and 10
+(unweighted 20-50): repeated positions are memorized, and the net sees fewer of the
+ordinary positions it evaluates in a search. With the halves of the previous entry: keep
+every position, uniformly, neither dropping nor repeating the volatile ones.
+
+Lambda 0.8 vs 0.9: +4 [-30, +38] and +15 [-19, +49]. The outcome blend's gain over 1.0
+(+43) is flat between 0.8 and 0.9; the recipe stays at 0.9.
+
 ## 2026-10-18: which positions to train on, and the outcome blend
 
 On generation 1 (n4 + n4j, 7,487,829 positions, target net5). Where `k/g1-net5-s1` errs on

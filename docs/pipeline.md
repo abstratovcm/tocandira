@@ -90,8 +90,10 @@ Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspirat
 - Train on every position: keeping only the half whose evaluation changes least with depth
   (as Stockfish filters non-quiet positions) loses ~40 Elo per node (2026-10-18); the
   volatile half is where the net learns.
-- Blend in the outcome: lambda 0.9 beats 1.0 by ~43 per node (two seeds, 2026-10-18). Pearson
-  had favoured 1.0; judge training settings by games.
+- Do not repeat them either: oversampling positions by surprise (KataGo style) loses 47-72
+  (2026-10-20). Uniform over all positions.
+- Blend in the outcome: lambda 0.9 beats 1.0 by ~43 per node (two seeds, 2026-10-18), and
+  0.8 ties 0.9 (2026-10-20). Pearson had favoured 1.0; judge training settings by games.
 - Training noise: the same recipe with another seed moves a screen by 24-36 Elo
   (2026-10-16). A difference of that size between two single trainings is not a result.
 - The screen against the fork compresses at 85-90%: two nets at +370 and +392 there were 70
