@@ -2,6 +2,43 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-21: generation 2 labels win the A/B; variety of game sources does not show
+
+Both tests local, overnight, two seeds, lambda 0.9, head to head at depth 5, 400 games
+each, no forfeits.
+
+Label check first (1,769 positions of n4j shard 075): depth 5 search with `l/lam09-s0`
+against the generation 1 labels (`i/d5-h128-l16-s`): unforced correlation 0.939 (generation 0
+vs 1: 0.64), 1.55x the spread (std 485 against 312), the other sign on 17% of unforced
+positions, the same forced positions. Then the first 20 n4j shards (1,128,000 positions,
+about 56,400 each) labeled again by `l/lam09-s0` on the Ryzen: 46 positions per second on
+14 workers, 6.9 h. Same positions, generation 1 labels against generation 2:
+
+| seed | generation 2 vs generation 1 |
+|---|---|
+| 0 | 55.6% [50.7, 60.4], **+39 [+5, +73]** |
+| 1 | 57.5% [52.6, 62.3], **+53 [+18, +87]** |
+
+Variety at equal size, generation 0 labels (hand depth 5): 3.1M positions of n4 alone
+against 3.1M drawn a third each from the d4, d5 and n4 games: -13 [-47, +21] and
++34 [-0, +68]. Within the seed noise: at this scale the kind of games matters less than
+the labeler, and generation 0's +128 came mostly from the count.
+
+Decision: label generation 2 starts, its labeler `l/lam09-s0` frozen (it beats the
+generation 1 labeler by about +270 at equal time: +171 for `j`, +97 more for `l`).
+
+## 2026-10-20: LMR by cutoff history: no gain
+
+Instrumented at 1 s per move on the 20 positions (`l/lam09-s0`, the five match switches):
+of the moves LMR reduces, 1,364,029 have no cutoff history and their reduced scout beats
+alpha 0.38% of the time; 411,012 have some and beat it 1.32% of the time. Sparing the
+second group would search 23% of the reduced moves at full depth to catch 1.3% of them, so
+the opposite was built: `--lmr-history` reduces the moves without history one ply more
+(off by default, byte identical off; scout depth at least 1). Mean depth reached at 1 s:
+7.35 -> 7.50. Match on top of the five switches vs the five, 800 games, SPRT [0, 20]:
+50.4% [46.9, 53.8], +3 [-21, +27], no decision; tested and off. Like the LMR table, the
+extra depth pays for what the larger reductions miss and no more.
+
 ## 2026-10-20: the new candidate at equal time: +650 over nokamute 1.0.3
 
 `l/lam09-s0` (generation 1, 7.5M positions, lambda 0.9) at 1 s per move on Colab (v6e-1),

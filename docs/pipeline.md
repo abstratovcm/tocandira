@@ -40,7 +40,8 @@ A generation is one frozen labeler: engine commit, net file (sha1), depth.
 | generation | labeler | data |
 |---|---|---|
 | 0 | nokamute's hand eval, depths 3, 4, 5 | d4 and d5 games (3.8M positions), n4 games |
-| 1 (since 2026-10-16) | net `i/d5-h128-l16-s`, depth 5 (`score_net5`) | n4 games (net self play, seeds 3000+, 3.1M), n4j (seeds 4000+, played by `j/n4-net5-s0`, 4.3M); 7.5M in all |
+| 1 (2026-10-16 to 2026-10-21) | net `i/d5-h128-l16-s`, depth 5 (`score_net5`) | n4 games (net self play, seeds 3000+, 3.1M), n4j (seeds 4000+, played by `j/n4-net5-s0`, 4.3M); 7.5M in all |
+| 2 (since 2026-10-21) | net `l/lam09-s0` (sha1 698bd99a), depth 5 (`score_net5`) | n4j shards 0-19 relabeled (runs/data/m2s, A/B only); new games next |
 
 Policy:
 - Never relabel history. A round labels only its own new positions, with the current
@@ -74,7 +75,7 @@ Matches and play use the options that won a timed match:
 | `--rfp=100` | 2026-10-18 | +67 [+22, +112] on top of the four, SPRT stopped at 235 games |
 
 Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspiration-window=50`
-(+10 [−24, +44]), `--lmr-scale=2.5` (+7 [−18, +31]), `--root-pvs` (+5 [−19, +29]). A switch joins a label definition only at a deliberate generation change.
+(+10 [−24, +44]), `--lmr-scale=2.5` (+7 [−18, +31]), `--root-pvs` (+5 [−19, +29]), `--lmr-history` (+3 [−21, +27]). A switch joins a label definition only at a deliberate generation change.
 
 ## Rules learned the hard way
 
