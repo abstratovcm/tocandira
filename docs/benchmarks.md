@@ -2,6 +2,33 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-21: the label definition: deeper is not better, cheaper is
+
+Before the generation 2 data round, the cost and quality of a label by its definition, on
+100 n4j positions (one per game), `l/lam09-s0`, fresh engine, one thread:
+
+| definition | s per position | corr. plain depth 7 | corr. switched depth 9 | forced right vs depth 9 |
+|---|---|---|---|---|
+| plain depth 5 (generation 1, 2's A/B) | 0.213 | 0.980 | 0.974 | 96 |
+| switches (null move, LMR, killers, rfp=100), depth 5 | 0.064 | 0.979 | 0.972 | 96 |
+| switches, depth 6 | 0.272 | 0.995 | 0.988 | 99 |
+| switches, depth 7 | 0.922 | 0.998 | 0.991 | 99 |
+| plain depth 7 / switched depth 9 (references) | 12.25 / 16.74 | | | |
+
+Generation 1's labels on the same positions: 0.925 against switched depth 9. Colab timing,
+from the n4j shard times: one shard (~57k positions) every 18 min per runtime, 53 per
+second, the v5e-1 as fast as the v6e-1; the Ryzen does 46.
+
+E1, same 1,150,157 positions (n4j shards 0-19), labeler `l/lam09-s0`: switched depth 6 labels
+made locally (39 per second, 8.2 h; unforced correlation with plain depth 5 0.982, forced
+7.5% against 8.5%), two seeds, lambda 0.9, head to head at depth 5 against the plain depth 5
+nets of the same seeds, 400 games each, no forfeits: +19 [-15, +53] and -10 [-44, +24]
+plain, +25 [-9, +59] and -22 [-56, +12] with the match switches on both sides. A tie: a
+search one ply deeper with the same net changes the labels too little to show, unlike a
+better net (generation 1 to 2, correlation 0.939, +46). The definition is chosen by cost:
+switched depth 5, a third of plain depth 5's cost for the same quality (being confirmed in
+training the same way).
+
 ## 2026-10-21: generation 2 labels win the A/B; variety of game sources does not show
 
 Both tests local, overnight, two seeds, lambda 0.9, head to head at depth 5, 400 games

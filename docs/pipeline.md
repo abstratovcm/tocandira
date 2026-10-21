@@ -8,7 +8,7 @@ How a round goes, what a label is, and the rules learned so far. Measured number
 | step | tool | where | time |
 |---|---|---|---|
 | 1. self play | `hive-label --games ... --depth 4 --opening-plies 6 --engine-options "cmd=<fork> --nnue <net> <match switches>"` | `colab/01_generate_instance{0,1}` | ~1 h per 60k games on two runtimes |
-| 2. labels | `hive-label --relabel <games> --depths "" --nnue <labeler> --nnue-depths 6 --nnue-options "<switches>" --scalars`, then `hive-encode --radius 6` | `colab/01_relabel_instance{0,1}` or local | plain depth 5: ~53 positions/s per Colab runtime (v5e-1 = v6e-1), 46/s on the Ryzen; switched depth 6 about 1.3x slower |
+| 2. labels | `hive-label --relabel <games> --depths "" --nnue <labeler> --nnue-depths 5 --nnue-options "<switches>" --scalars`, then `hive-encode --radius 6` | `colab/01_relabel_instance{0,1}` or local | plain depth 5: ~53 positions/s per Colab runtime (v5e-1 = v6e-1), 46/s on the Ryzen; with the switches about 3x faster |
 | 3. scalars | `hive-label --relabel <labeled> --depths "" --scalars`, then `hive-encode --radius 6` (only for labels made without `--scalars`) | local | ~5 min per 4M positions |
 | 4. training | `hive-train <npz folder> <out> target=net5 hidden=128 l2=16 scalars=true lam=0.9 patience=5 max_epochs=60`, two seeds | local GPU (ROCm) | ~5 s per epoch per 4M positions |
 | 5. screen | `hive-tournament --a "cmd=<fork> --nnue <net>,depth=5" --b "cmd=<fork>,depth=5" --games 400` | local, 14 workers | ~7 min |
@@ -41,7 +41,10 @@ futility) keep a label a function of the position.
 Before changing a label's definition, check it on ~100 positions against a deep reference
 search (2026-10-21, `l/lam09-s0`): with the four switches, depth 6 costs 1.3x plain depth 5
 and correlates 0.995 with plain depth 7 (plain depth 5: 0.980), depth 5 matches plain depth
-5 at 0.3x the cost, depth 7 reaches 0.998 at 4.3x.
+5 at 0.3x the cost, depth 7 reaches 0.998 at 4.3x. Trained on the same 1.15M positions,
+switched depth 6 labels gave nets no better than plain depth 5 (+19, -10 plain; +25, -22
+with the switches): a deeper search with the same net changes the labels little (0.982),
+so the definition is chosen by cost: switched depth 5.
 
 ## Label generations
 
@@ -51,7 +54,7 @@ A generation is one frozen labeler: engine commit, net file (sha1), depth.
 |---|---|---|
 | 0 | nokamute's hand eval, depths 3, 4, 5 | d4 and d5 games (3.8M positions), n4 games |
 | 1 (2026-10-16 to 2026-10-21) | net `i/d5-h128-l16-s`, depth 5 (`score_net5`) | n4 games (net self play, seeds 3000+, 3.1M), n4j (seeds 4000+, played by `j/n4-net5-s0`, 4.3M); 7.5M in all |
-| 2 (since 2026-10-21) | net `l/lam09-s0` (sha1 698bd99a) with `--null-move-pruning --lmr --killers --rfp=100`, depth 6 (`score_net6`); the A/B used plain depth 5 | n4j shards 0-19 (plain depth 5 for the A/B, switched depth 6 for E1); n4l (seeds 5000+, played by `l/lam09-s0` with the match switches, 6 random plies, 60 shards) |
+| 2 (since 2026-10-21) | net `l/lam09-s0` (sha1 698bd99a) with `--null-move-pruning --lmr --killers --rfp=100`, depth 5 (`score_net5`, options in the labeler); the A/B used plain depth 5 | n4j shards 0-19 (plain depth 5 for the A/B, switched depths 5 and 6 for E1); n4l (seeds 5000+, played by `l/lam09-s0` with the match switches, 6 random plies, 60 shards) |
 
 Policy:
 - A label costs the same on old or new positions, locally or on Colab: relabel what an
@@ -133,6 +136,7 @@ dates in [benchmarks.md](benchmarks.md). "Per node": head to head at fixed depth
 
 | lever | kind | gain | how | kept |
 |---|---|---|---|---|
+| switched depth 6 vs plain depth 5 labels, same net and 1.15M positions | labels | +3 (+19, -10 / +25, -22) | per node, 2 seeds, plain and switched | no (cost) |
 | generation 2 labels (`l`'s search) vs generation 1 (`i`'s), same 1.1M positions | labels | +39, +53 | per node, 2 seeds | yes |
 | generation 1 labels (`i`'s search) vs hand eval, same 3.1M positions | labels | +94 | per node, 2 seeds | yes |
 | hand depth 5 vs depth 4 labels | labels | +55 | per node, from screens vs the fork | yes |
