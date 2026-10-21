@@ -31,7 +31,9 @@ records are kept, so depths can be added later.
 adds the engine's 12 strategy scalars per position ("scalars"), which need no search.
 `--nnue weights.bin --nnue-depths 5` also searches each position with that net, the same
 way (fresh engine, one thread, 16 MiB table), under "net5"; the record names the net and
-the sha1 of its file ("labeler"), since those labels belong to that net.
+the sha1 of its file ("labeler"), since those labels belong to that net. `--nnue-options`
+adds deterministic search options to that search (e.g. "--null-move-pruning --lmr"); they
+are part of the label's definition and recorded in "labeler".
 """
 
 from __future__ import annotations
@@ -126,10 +128,11 @@ def label_position(
     return scores
 
 
-def labeler(nnue: str) -> dict[str, str]:
-    """What identifies net search labels: the net's file name and the sha1 of its bytes."""
+def labeler(nnue: str, options: str = "") -> dict[str, str]:
+    """What identifies net search labels: net file name, sha1 of its bytes, search options."""
     with open(nnue, "rb") as f:
-        return {"net": os.path.basename(nnue), "sha1": hashlib.sha1(f.read()).hexdigest()}
+        record = {"net": os.path.basename(nnue), "sha1": hashlib.sha1(f.read()).hexdigest()}
+    return {**record, "options": options} if options else record
 
 
 def relabel_game(
@@ -139,6 +142,7 @@ def relabel_game(
     scalars: bool = False,
     nnue: str | None = None,
     nnue_depths: tuple[int, ...] = (),
+    nnue_options: str = "",
 ) -> Game:
     """`game` with `depth`, and per position `scores` (and `scalars`) added.
 
@@ -160,14 +164,15 @@ def relabel_game(
                     eng.play(game["moves"][ply])
     extra: Game = {}
     if nnue and nnue_depths:
-        spec = PlayerSpec.parse(f"cmd={PlayerSpec().cmd} --nnue {nnue},depth=1,{LABEL_OPTIONS}")
+        cmd = " ".join(filter(None, [PlayerSpec().cmd, "--nnue", nnue, nnue_options]))
+        spec = PlayerSpec.parse(f"cmd={cmd},depth=1,{LABEL_OPTIONS}")
         with Engine(spec) as net:
             for p in positions:
                 moves = game["moves"][: p["ply"]]
                 p["scores"].update(
                     label_position(net, game["game_type"], moves, list(nnue_depths), "net")
                 )
-        extra["labeler"] = labeler(nnue)
+        extra["labeler"] = labeler(nnue, nnue_options)
     depth = source_depth if source_depth is not None else game.get("depth")
     return {**game, **extra, "depth": depth, "positions": positions}
 
@@ -177,7 +182,7 @@ def _label(task: Task) -> Game:
 
 
 def _relabel(
-    task: tuple[Game, list[int], int | None, bool, str | None, tuple[int, ...]],
+    task: tuple[Game, list[int], int | None, bool, str | None, tuple[int, ...], str],
 ) -> Game:
     return relabel_game(*task)
 
@@ -203,6 +208,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--nnue", help="with --relabel: also search with this net (weights.bin)")
     p.add_argument("--nnue-depths", default="5", help="with --nnue: depths, stored as net<d>")
     p.add_argument(
+        "--nnue-options", default="", help="with --nnue: search options, part of the label"
+    )
+    p.add_argument(
         "--source-depth", type=int, help="with --relabel: depth the games were played at"
     )
     return p.parse_args(argv)
@@ -217,7 +225,10 @@ def relabel(args: argparse.Namespace) -> int:
     out = args.out or os.path.join(RUNS, f"relabel-{dt.datetime.now():%Y%m%d-%H%M%S}.jsonl")
     print(f"{len(games)} games, depths {depths}, {args.workers} workers -> {out}", file=sys.stderr)
     nnue_depths = tuple(int(d) for d in args.nnue_depths.split(",") if d)
-    tasks = [(g, depths, args.source_depth, args.scalars, args.nnue, nnue_depths) for g in games]
+    tasks = [
+        (g, depths, args.source_depth, args.scalars, args.nnue, nnue_depths, args.nnue_options)
+        for g in games
+    ]
     n_pos = 0
     t0 = time.perf_counter()
     with open(out, "w") as f, Pool(args.workers) as pool:

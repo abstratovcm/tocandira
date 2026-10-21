@@ -110,6 +110,20 @@ def test_load_shards_keeps_the_arrays_every_shard_has(tmp_path):
     assert meta["dropped"] == ["score_net5"]
 
 
+def test_load_shards_never_mixes_labelers(tmp_path):
+    v3 = {**_synthetic(100, seed=1), "opening": np.arange(100, dtype=np.int64)}
+    v3["score_net5"] = v3["score"]
+    first = {**META, "labeler": {"net": "a.bin", "sha1": "1"}}
+    _save(tmp_path / "a.npz", v3, first)
+    _save(tmp_path / "b.npz", {**v3, "score_net5": v3["score"] + 1}, first)
+    merged, _ = load_shards([str(tmp_path / "a.npz"), str(tmp_path / "b.npz")])
+    assert len(merged["score_net5"]) == 200
+    other = {**META, "labeler": {"net": "a.bin", "sha1": "1", "options": "--lmr"}}
+    _save(tmp_path / "c.npz", v3, other)
+    with pytest.raises(ValueError, match="different labelers"):
+        load_shards([str(tmp_path / "a.npz"), str(tmp_path / "c.npz")])
+
+
 def test_target_score_averages_depths_in_win_probability():
     data = {
         "score": np.array([7, 0, 0], dtype=np.int16),

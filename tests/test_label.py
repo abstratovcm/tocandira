@@ -86,3 +86,11 @@ def test_relabel_with_a_net_adds_its_labels(tmp_path):
     # Another evaluator, another search: the labels differ somewhere, and repeat exactly.
     assert any(p["scores"]["2"] != p["scores"]["net2"] for p in a["positions"])
     assert relabel_game(game, [2], source_depth=1, nnue=str(path), nnue_depths=(2,)) == a
+    # Search options are part of the label: recorded, and the labels repeat exactly.
+    opts = "--null-move-pruning --lmr --killers --rfp=100"
+    b = relabel_game(game, [], source_depth=1, nnue=str(path), nnue_depths=(3,), nnue_options=opts)
+    assert b["labeler"]["options"] == opts
+    assert (
+        relabel_game(game, [], source_depth=1, nnue=str(path), nnue_depths=(3,), nnue_options=opts)
+        == b
+    )

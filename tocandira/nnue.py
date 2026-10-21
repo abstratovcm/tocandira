@@ -52,11 +52,13 @@ def load_shards(paths: list[str]) -> tuple[Data, Meta]:
     two sessions encoding into one Drive folder leave identical copies, and with their own
     game ids a held out game's copy would land in the training set. Optional arrays (labels
     of one generation, scalars) are kept only if every shard has them; the others are
-    listed in `meta["dropped"]`.
+    listed in `meta["dropped"]`. Net search labels (`score_net<d>`) of different labelers
+    (net, sha1, search options) are never mixed: that raises ValueError.
     """
     shards: list[dict[str, npt.NDArray[Any]]] = []
     meta: Meta = {}
     seen: set[str] = set()
+    labelers: set[str] = set()
     duplicates = 0
     for path in sorted(paths):
         with open(path, "rb") as f:
@@ -71,6 +73,8 @@ def load_shards(paths: list[str]) -> tuple[Data, Meta]:
             if meta and m["radius"] != meta["radius"]:
                 raise ValueError(f"{path}: radius {m['radius']} differs from {meta['radius']}")
             meta = {"radius": m["radius"], "num_features": m["num_features"], "shards": i + 1}
+            if any(k[:9] == "score_net" for k in d.files):
+                labelers.add(json.dumps(m.get("labeler"), sort_keys=True))
             extra = [
                 k
                 for k in d.files
@@ -83,6 +87,8 @@ def load_shards(paths: list[str]) -> tuple[Data, Meta]:
                 }
             )
     common = set.intersection(*(set(shard) for shard in shards))
+    if len(labelers) > 1 and any(k[:9] == "score_net" for k in common):
+        raise ValueError(f"net labels of different labelers: {sorted(labelers)}")
     meta["duplicates"] = duplicates
     meta["dropped"] = sorted(set.union(*(set(shard) for shard in shards)) - common)
     return {k: np.concatenate([shard[k] for shard in shards]) for k in sorted(common)}, meta
