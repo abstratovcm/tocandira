@@ -2,6 +2,41 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-22: generation 2's round: what helped
+
+The n4l games on Colab (two v5e-1): 60,000 self play games of `l/lam09-s0` with the match
+switches, depth 4, 6 random opening plies, seeds 5000+, 3,575,689 positions (59.6 per game),
+labeled there at switched depth 5 with scalars; every shard carries the same labeler record
+as the local n4j labels. Generation 2: n4l plus n4j shards 0-19, 4,725,846 positions. Lambda
+0.9, two seeds, head to head at depth 5, 400 games each, plain search unless stated, no
+forfeits in any of the 12 matches.
+
+| experiment | seed 0 | seed 1 |
+|---|---|---|
+| E2: n4l shards 0-19 vs n4j shards 0-19 (same labels, 1.19M vs 1.15M), plain / switched | -60 [-94, -25] / +1 | -3 / -15 |
+| E3: both (2.34M) vs n4j alone (1.15M) | **+62 [+28, +97]** | **+53 [+19, +88]** |
+| E4: all 4.73M from `l/lam09-s0`'s weights (`init=`) vs from scratch | **+44 [+9, +78]** | +26 [-8, +60] |
+| all 4.73M from scratch vs `l/lam09-s0`, plain / switched | +60 [+25, +94] / -10 | +25 / +17 |
+
+Readings. The new games teach no more than older ones at equal size (E2; with the variety
+test of 2026-10-21, where positions come from barely matters). Volume does at this size
+(E3, about +57 for twice the data), and so does a warm start (E4, about +35; seed 0 stopped
+at epoch 2, seed 1 at 22). Against `l`, the plain and switched head to heads disagree for
+seed 0: the generation 2 nets output wider values (std 540-579 against 469), so reverse
+futility prunes more with them; a timed match decides.
+
+The timed match: `n/g2-warm-s0` (generation 2, all 4.73M positions, from `l`'s weights) vs
+`l/lam09-s0`, both with the five match switches, 1 s per move, 6 games at a time, SPRT
+[0, 20]: **64.5% [56.6, 71.6], +104 [+46, +161]**, W87 D22 L43, H1 accepted at 152 games;
+71% as white and 58% as black, median 54 plies, 0.83 and 0.84 s per move, no forfeits.
+The switched head to head at depth 5 (-10 for the same data from scratch) had understated
+it: pruning more with wider values also buys time. `n/g2-warm-s0` is the new best.
+
+E5, its reverse futility margin scaled to its output spread (100 x 540 / 469 = 115) against
+100, same net and switches otherwise, 1 s per move, 800 games, SPRT [0, 20] undecided:
+53.0% [49.5, 56.4], **+21 [-3, +45]**, W317 D214 L269, no forfeits. Adopted as the best
+estimate, like LMR's +20: the margin follows the net's spread.
+
 ## 2026-10-21: the label definition: deeper is not better, cheaper is
 
 Before the generation 2 data round, the cost and quality of a label by its definition, on
@@ -26,8 +61,13 @@ nets of the same seeds, 400 games each, no forfeits: +19 [-15, +53] and -10 [-44
 plain, +25 [-9, +59] and -22 [-56, +12] with the match switches on both sides. A tie: a
 search one ply deeper with the same net changes the labels too little to show, unlike a
 better net (generation 1 to 2, correlation 0.939, +46). The definition is chosen by cost:
-switched depth 5, a third of plain depth 5's cost for the same quality (being confirmed in
-training the same way).
+switched depth 5, a third of plain depth 5's cost for the same quality.
+
+Confirmed the same way (switched depth 5 labels on the same positions, 143 per second
+locally, 2.2 h): against the plain depth 5 nets, +45 [+10, +79] and +32 [-2, +66] plain,
++37 [+3, +72] and +3 [-31, +37] with the switches; about +29, better rather than equal. A
+possible reason: the labels now come from the search the engine plays with. Generation 2
+labels are switched depth 5.
 
 ## 2026-10-21: generation 2 labels win the A/B; variety of game sources does not show
 

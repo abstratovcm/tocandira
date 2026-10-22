@@ -234,6 +234,7 @@ class Config:
     seed: int = 0
     augment: bool = True  # random D6 symmetry per batch
     scalars: bool = False  # feed the strategy scalars to the first layer (needs them in the data)
+    init: str = ""  # nnue.pt to start from (same shape) instead of random weights
 
 
 class Tensors:
@@ -326,7 +327,10 @@ class TrainResult:
 def _new_model(data: Data, meta: Meta, cfg: Config) -> Nnue:
     if cfg.scalars and "scalars" not in data:
         raise ValueError("Config.scalars needs data with scalars (hive-label --scalars)")
-    return Nnue(int(meta["num_features"]), cfg.hidden, cfg.l2, NUM_SCALARS if cfg.scalars else 0)
+    model = Nnue(int(meta["num_features"]), cfg.hidden, cfg.l2, NUM_SCALARS if cfg.scalars else 0)
+    if cfg.init:  # a warm start from an earlier net of the same shape
+        model.load_state_dict(torch.load(cfg.init, map_location="cpu")["state"])
+    return model
 
 
 def train(

@@ -44,7 +44,8 @@ and correlates 0.995 with plain depth 7 (plain depth 5: 0.980), depth 5 matches 
 5 at 0.3x the cost, depth 7 reaches 0.998 at 4.3x. Trained on the same 1.15M positions,
 switched depth 6 labels gave nets no better than plain depth 5 (+19, -10 plain; +25, -22
 with the switches): a deeper search with the same net changes the labels little (0.982),
-so the definition is chosen by cost: switched depth 5.
+so the definition is chosen by cost: switched depth 5, which also trained better than plain
+depth 5 on the same positions (+45, +32 plain; +37, +3 switched).
 
 ## Label generations
 
@@ -54,7 +55,7 @@ A generation is one frozen labeler: engine commit, net file (sha1), depth.
 |---|---|---|
 | 0 | nokamute's hand eval, depths 3, 4, 5 | d4 and d5 games (3.8M positions), n4 games |
 | 1 (2026-10-16 to 2026-10-21) | net `i/d5-h128-l16-s`, depth 5 (`score_net5`) | n4 games (net self play, seeds 3000+, 3.1M), n4j (seeds 4000+, played by `j/n4-net5-s0`, 4.3M); 7.5M in all |
-| 2 (since 2026-10-21) | net `l/lam09-s0` (sha1 698bd99a) with `--null-move-pruning --lmr --killers --rfp=100`, depth 5 (`score_net5`, options in the labeler); the A/B used plain depth 5 | n4j shards 0-19 (plain depth 5 for the A/B, switched depths 5 and 6 for E1); n4l (seeds 5000+, played by `l/lam09-s0` with the match switches, 6 random plies, 60 shards) |
+| 2 (since 2026-10-21; best net `n/g2-warm-s0`) | net `l/lam09-s0` (sha1 698bd99a) with `--null-move-pruning --lmr --killers --rfp=100`, depth 5 (`score_net5`, options in the labeler); the A/B used plain depth 5 | n4j shards 0-19 (plain depth 5 for the A/B, switched depths 5 and 6 for E1); n4l (seeds 5000+, played by `l/lam09-s0` with the match switches, 6 random plies, 60 shards) |
 
 Policy:
 - A label costs the same on old or new positions, locally or on Colab: relabel what an
@@ -87,6 +88,7 @@ and play use the options that won a timed match:
 | `--partial-iteration` | 2026-10-16 | +50 [+15, +86] on top of both, SPRT stopped at 376 games |
 | `--killers` | 2026-10-16 | +25 [+1, +49] on top of the three, 800 games |
 | `--rfp=100` | 2026-10-18 | +67 [+22, +112] on top of the four, SPRT stopped at 235 games |
+| `--rfp=115` with `n/g2-warm-s0` | 2026-10-22 | +21 [−3, +45] over 100, 800 games (best estimate): the margin is 100 x the net's output std / 469 (`l/lam09-s0`'s) |
 
 Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspiration-window=50`
 (+10 [−24, +44]), `--lmr-scale=2.5` (+7 [−18, +31]), `--root-pvs` (+5 [−19, +29]), `--lmr-history` (+3 [−21, +27]). A switch joins a label definition only at a deliberate generation change.
@@ -107,6 +109,12 @@ Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspirat
   volatile half is where the net learns.
 - Do not repeat them either: oversampling positions by surprise (KataGo style) loses 47-72
   (2026-10-20). Uniform over all positions.
+- Volume and the labeler matter, the games' source barely: new games by the best player,
+  more opening plies or mixed sources never beat older positions at equal size (2026-10-21,
+  2026-10-22), while twice the positions gave +57 and a better labeler +46. Spend on
+  positions with labels, cheaply (switched depth 5).
+- Start from the previous best's weights (`init=`): +35 per node over training from
+  scratch on generation 2's data (2026-10-22).
 - Blend in the outcome: lambda 0.9 beats 1.0 by ~43 per node (two seeds, 2026-10-18), and
   0.8 ties 0.9 (2026-10-20). Pearson had favoured 1.0; judge training settings by games.
 - Training noise: the same recipe with another seed moves a screen by 24-36 Elo
@@ -136,6 +144,12 @@ dates in [benchmarks.md](benchmarks.md). "Per node": head to head at fixed depth
 
 | lever | kind | gain | how | kept |
 |---|---|---|---|---|
+| new games (l, switches, 6 random plies) vs older positions (j's games), same labels and size | data | -19 (-60, +1 / -3, -15) | per node, 2 seeds | no effect |
+| 2.34M vs 1.15M generation 2 positions | data | +57 (+62, +53) | per node, 2 seeds | yes |
+| warm start from the previous best's weights vs from scratch | training | +35 (+44, +26) | per node, 2 seeds | yes |
+| generation 2 net (`n/g2-warm-s0`) vs `l/lam09-s0`, both with the five switches | net | +104 [+46, +161] | time, SPRT 152 games | yes |
+| reverse futility margin scaled to the net's spread (115 vs 100) | search | +21 [-3, +45] | time, 800 games | yes (best estimate) |
+| switched depth 5 vs plain depth 5 labels, same net and 1.15M positions | labels | +29 (+45, +32 / +37, +3), at 0.3x the cost | per node, 2 seeds, plain and switched | yes |
 | switched depth 6 vs plain depth 5 labels, same net and 1.15M positions | labels | +3 (+19, -10 / +25, -22) | per node, 2 seeds, plain and switched | no (cost) |
 | generation 2 labels (`l`'s search) vs generation 1 (`i`'s), same 1.1M positions | labels | +39, +53 | per node, 2 seeds | yes |
 | generation 1 labels (`i`'s search) vs hand eval, same 3.1M positions | labels | +94 | per node, 2 seeds | yes |

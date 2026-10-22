@@ -1,4 +1,5 @@
 import json
+from dataclasses import asdict
 
 import numpy as np
 import pytest
@@ -158,6 +159,19 @@ def test_training_keeps_the_best_epoch_and_stops_early(tmp_path):
     weights = np.load(tmp_path / "weights.npz")
     assert weights["ft"].shape == (NUM_FEATURES, 32)
     assert int(weights["radius"]) == RADIUS
+
+
+def test_training_can_start_from_a_checkpoint(tmp_path):
+    data = _synthetic(2000, seed=3)
+    cfg = Config(hidden=16, l2=8, max_epochs=3, patience=1, batch=64, augment=False)
+    first = train(data, META, cfg, str(tmp_path / "a"), log=lambda _: None)
+    warm = Config(**{**asdict(cfg), "init": str(tmp_path / "a" / "nnue.pt"), "max_epochs": 1})
+    second = train(data, META, warm, str(tmp_path / "b"), log=lambda _: None)
+    cold = Config(**{**asdict(cfg), "max_epochs": 1})
+    third = train(data, META, cold, str(tmp_path / "c"), log=lambda _: None)
+    # One epoch from the trained weights beats one epoch from random ones.
+    assert second.best.loss < third.best.loss
+    assert second.best.loss <= first.best.loss * 1.5
 
 
 @pytest.mark.slow
