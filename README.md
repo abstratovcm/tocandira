@@ -67,13 +67,12 @@ uv run hive-label --games 1000 --depth 4 --random-move-prob 0.1           # -> r
 uv run hive-train <npz folder> <out> target=net5 hidden=128 l2=16 scalars=true lam=0.9
 ```
 
-Player specs (`depth=`, `seconds=`, `cmd=`, UHP options) are in `tocandira/uhp.py`; a full
-round, with every command, in [docs/pipeline.md](docs/pipeline.md).
+Player specs are in `tocandira/uhp.py`; every command of a round in [docs/pipeline.md](docs/pipeline.md).
 
 ## Development
 
 ```bash
-uv run ruff format && uv run ruff check --fix && uv run mypy && uv run pytest -q
+uv run ruff format && uv run ruff check --fix && uv run mypy && uv run pytest -q   # as CI does; conventions in CONTRIBUTING.md
 ```
 
-CI runs the same on every push; conventions in [CONTRIBUTING.md](CONTRIBUTING.md).
+Code and documentation written with Claude and Gemini.
