@@ -8,36 +8,57 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: tocandira_linux_amd64.tar.gz
+          - os: windows-latest
+            asset: tocandira_win64.zip
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-gnu
-      - run: sudo apt-get update && sudo apt-get install -y mingw-w64
-      - run: scripts/build_release.sh --windows
+      - run: scripts/build_release.sh
       - name: Package
         run: |
+          mkdir dist
+          cp LICENSE dist/LICENSE
+          cp engine/nokamute/LICENSE.md dist/LICENSE-nokamute.md
+          B=engine/nokamute/target/bundled/release
+          if [ "$RUNNER_OS" = Windows ]; then
+            cp $B/nokamute.exe dist/tocandira.exe
+            (cd dist && 7z a ../${{ matrix.asset }} *)
+          else
+            cp $B/nokamute dist/tocandira
+            strip dist/tocandira
+            tar czf ${{ matrix.asset }} --owner=0 --group=0 -C dist .
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - run: |
           source nets/release.env
-          B=engine/nokamute/target/bundled
-          mkdir -p dist/linux dist/win
-          for d in dist/linux dist/win; do
-            cp LICENSE $d/LICENSE
-            cp engine/nokamute/LICENSE.md $d/LICENSE-nokamute.md
-          done
-          cp $B/release/nokamute dist/linux/tocandira
-          strip dist/linux/tocandira
-          cp $B/x86_64-pc-windows-gnu/release/nokamute.exe dist/win/tocandira.exe
-          tar czf tocandira_linux_amd64.tar.gz --owner=0 --group=0 -C dist/linux .
-          (cd dist/win && zip ../../tocandira_win64.zip *)
-          cp "$TOCANDIRA_NET" .
-          echo "NET=$(basename "$TOCANDIRA_NET")" >> "$GITHUB_ENV"
-      - run: >
-          gh release create "$GITHUB_REF_NAME" --title "tocandira $GITHUB_REF_NAME"
-          --notes-file "docs/releases/$GITHUB_REF_NAME.md"
-          tocandira_linux_amd64.tar.gz tocandira_win64.zip "$NET"
+          gh release create "$GITHUB_REF_NAME" --title "tocandira $GITHUB_REF_NAME" \
+            --notes-file "docs/releases/$GITHUB_REF_NAME.md" \
+            tocandira_linux_amd64.tar.gz tocandira_win64.zip "$TOCANDIRA_NET"
         env:
           GH_TOKEN: ${{ github.token }}
