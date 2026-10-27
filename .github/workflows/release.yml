@@ -46,8 +46,32 @@ jobs:
           name: ${{ matrix.asset }}
           path: ${{ matrix.asset }}
 
+  wasm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: cargo install wasm-bindgen-cli --locked --version "$(grep -A1 '^name = "wasm-bindgen"$' engine/nokamute/Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')"
+      - run: scripts/build_wasm.sh
+      - name: Package
+        run: |
+          mkdir dist
+          cp engine/nokamute/target/bundled-wasm/pkg/nokamute.js engine/nokamute/target/bundled-wasm/pkg/nokamute_bg.wasm dist/
+          cp LICENSE dist/LICENSE
+          cp engine/nokamute/LICENSE.md dist/LICENSE-nokamute.md
+          (cd dist && zip -q ../tocandira_wasm.zip *)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tocandira_wasm.zip
+          path: tocandira_wasm.zip
+
   publish:
-    needs: build
+    needs: [build, wasm]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -59,6 +83,6 @@ jobs:
           source nets/release.env
           gh release create "$GITHUB_REF_NAME" --title "tocandira $GITHUB_REF_NAME" \
             --notes-file "docs/releases/$GITHUB_REF_NAME.md" \
-            tocandira_linux_amd64.tar.gz tocandira_win64.zip "$TOCANDIRA_NET"
+            tocandira_linux_amd64.tar.gz tocandira_win64.zip tocandira_wasm.zip "$TOCANDIRA_NET"
         env:
           GH_TOKEN: ${{ github.token }}

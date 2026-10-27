@@ -8,8 +8,10 @@ Target: beat nokamute 1.0.3 at equal time per move. Status: done; v1.0.0 (2026-1
 scores 97.8% [96.5, 98.6] (+660 Elo) over 800 games at 1 s per move, tocandira vs
 nokamute 1.0.3; see [docs/benchmarks.md](docs/benchmarks.md).
 
-To play it: a [release](https://github.com/abstratovcm/tocandira/releases) (Linux,
-Windows) is one UHP engine binary with the net inside; set it as MzingaViewer's Engine.
+To play it: a [release](https://github.com/tocandira/tocandira/releases) (Linux,
+Windows) is one UHP engine binary with the net inside; set it as MzingaViewer's Engine. Or in
+the browser: [tanajura](https://github.com/tocandira/tanajura) runs the release's wasm build
+(`tocandira_wasm.zip`, `scripts/build_wasm.sh`) and shows what the engine reports.
 
 ## Roadmap
 

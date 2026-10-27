@@ -8,6 +8,7 @@ import pytest
 from tocandira.uhp import NOKAMUTE, REPO_ROOT, Engine, PlayerSpec, game_state
 
 RELEASE = os.path.join(REPO_ROOT, "engine", "nokamute", "target", "bundled", "release", "nokamute")
+WASM_PKG = os.path.join(REPO_ROOT, "engine", "nokamute", "target", "bundled-wasm", "pkg")
 MATCH_SWITCHES = "--null-move-pruning --lmr --partial-iteration --killers"
 pytestmark = pytest.mark.skipif(
     not (os.path.exists(RELEASE) and os.path.exists(NOKAMUTE)),
@@ -38,3 +39,14 @@ def test_release_build_searches_like_the_measured_configuration():
             reference.play(move)
             if state != "InProgress":
                 break
+
+
+@pytest.mark.skipif(
+    not os.path.isdir(WASM_PKG), reason="wasm build (scripts/build_wasm.sh) not built"
+)
+def test_wasm_package_exports_uhp_with_the_net_inside():
+    """The browser package is the same engine: one `uhp` export, the net embedded."""
+    with open(os.path.join(WASM_PKG, "nokamute.js")) as f:
+        assert "export function uhp(" in f.read()
+    net = os.path.join(REPO_ROOT, _release_env()["TOCANDIRA_NET"])
+    assert os.path.getsize(os.path.join(WASM_PKG, "nokamute_bg.wasm")) > os.path.getsize(net)

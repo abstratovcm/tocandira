@@ -10,12 +10,16 @@ jobs:
         with:
           submodules: true
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine/nokamute
       - run: cargo build --release
         working-directory: engine/nokamute
       - run: scripts/build_release.sh
+      - run: cargo install wasm-bindgen-cli --locked --version "$(grep -A1 '^name = "wasm-bindgen"$' engine/nokamute/Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')"
+      - run: scripts/build_wasm.sh
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
       - run: uv run ruff check
