@@ -8,7 +8,7 @@ How a round goes, what a label is, and the rules learned so far. Measured number
 | step | tool | where | time |
 |---|---|---|---|
 | 1. self play | `hive-label --games ... --depth 4 --opening-plies 6 --engine-options "cmd=<fork> --nnue <net> <match switches>"` | `colab/01_generate_instance{0,1}` | ~1 h per 60k games on two runtimes |
-| 2. labels | `hive-label --relabel <games> --depths "" --nnue <labeler> --nnue-depths 5 --nnue-options "<switches>" --scalars`, then `hive-encode --radius 6` | `colab/01_relabel_instance{0,1}` or local | plain depth 5: ~53 positions/s per Colab runtime (v5e-1 = v6e-1), 46/s on the Ryzen; with the switches about 3x faster |
+| 2. labels | `hive-label --relabel <games> --depths "" --nnue <labeler> --nnue-depths 5 --nnue-options "<switches>" --scalars`, then `hive-encode --radius 6` | `colab/01_relabel_instance{0,1}` or local | plain depth 5: ~53 positions/s per Colab runtime (v5e-1 = v6e-1), 46/s on the Ryzen; with the switches ~118/s per v5e-1 runtime (~5.4 units per million positions, 2026-10-27), 143/s on the Ryzen |
 | 3. scalars | `hive-label --relabel <labeled> --depths "" --scalars`, then `hive-encode --radius 6` (only for labels made without `--scalars`) | local | ~5 min per 4M positions |
 | 4. training | `hive-train <npz folder> <out> target=net5 hidden=128 l2=16 scalars=true lam=0.9 patience=5 max_epochs=60`, two seeds | local GPU (ROCm) | ~5 s per epoch per 4M positions |
 | 5. screen | `hive-tournament --a "cmd=<fork> --nnue <net>,depth=5" --b "cmd=<fork>,depth=5" --games 400` | local, 14 workers | ~7 min |
@@ -55,7 +55,7 @@ A generation is one frozen labeler: engine commit, net file (sha1), depth.
 |---|---|---|
 | 0 | nokamute's hand eval, depths 3, 4, 5 | d4 and d5 games (3.8M positions), n4 games |
 | 1 (2026-10-16 to 2026-10-21) | net `i/d5-h128-l16-s`, depth 5 (`score_net5`) | n4 games (net self play, seeds 3000+, 3.1M), n4j (seeds 4000+, played by `j/n4-net5-s0`, 4.3M); 7.5M in all |
-| 2 (since 2026-10-21; best net `n/g2-warm-s0`) | net `l/lam09-s0` (sha1 698bd99a) with `--null-move-pruning --lmr --killers --rfp=100`, depth 5 (`score_net5`, options in the labeler); the A/B used plain depth 5 | n4j shards 0-19 (plain depth 5 for the A/B, switched depths 5 and 6 for E1); n4l (seeds 5000+, played by `l/lam09-s0` with the match switches, 6 random plies, 60 shards) |
+| 2 (since 2026-10-21; best net `o/g2b-warm-s0`) | net `l/lam09-s0` (sha1 698bd99a) with `--null-move-pruning --lmr --killers --rfp=100`, depth 5 (`score_net5`, options in the labeler); the A/B used plain depth 5 | n4j shards 0-19 (plain depth 5 for the A/B, switched depths 5 and 6 for E1); n4l (seeds 5000+, played by `l/lam09-s0` with the match switches, 6 random plies, 60 shards); then n4, n4j 20-75, d4 and d5 relabeled on Colab (2026-10-27); 14.83M in all |
 
 Policy:
 - A label costs the same on old or new positions, locally or on Colab: relabel what an
@@ -88,7 +88,8 @@ and play use the options that won a timed match:
 | `--partial-iteration` | 2026-10-16 | +50 [+15, +86] on top of both, SPRT stopped at 376 games |
 | `--killers` | 2026-10-16 | +25 [+1, +49] on top of the three, 800 games |
 | `--rfp=100` | 2026-10-18 | +67 [+22, +112] on top of the four, SPRT stopped at 235 games |
-| `--rfp=115` with `n/g2-warm-s0` | 2026-10-22 | +21 [−3, +45] over 100, 800 games (best estimate): the margin is 100 x the net's output std / 469 (`l/lam09-s0`'s) |
+| `--rfp=115` with `n/g2-warm-s0` | 2026-10-22 | +21 [−3, +45] over 100, 800 games (best estimate): the margin is 100 x the net's output std / `l/lam09-s0`'s, on the same positions |
+| `--rfp=124` with `o/g2b-warm-s0` | 2026-10-27 | the same rule (std 568 against `l`'s 458), not tested on its own |
 
 Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspiration-window=50`
 (+10 [−24, +44]), `--lmr-scale=2.5` (+7 [−18, +31]), `--root-pvs` (+5 [−19, +29]), `--lmr-history` (+3 [−21, +27]). A switch joins a label definition only at a deliberate generation change.
@@ -111,7 +112,8 @@ Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspirat
   (2026-10-20). Uniform over all positions.
 - Volume and the labeler matter, the games' source barely: new games by the best player,
   more opening plies or mixed sources never beat older positions at equal size (2026-10-21,
-  2026-10-22), while twice the positions gave +57 and a better labeler +46. Spend on
+  2026-10-22), while twice the positions gave +57, three times +93 at equal time
+  (2026-10-27), and a better labeler +46. Spend on
   positions with labels, cheaply (switched depth 5).
 - Start from the previous best's weights (`init=`): +35 per node over training from
   scratch on generation 2's data (2026-10-22).
@@ -127,8 +129,9 @@ Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspirat
 - Decide candidates with the match switches on. Plain depth 5 head to heads measure the
   evaluation alone; reverse futility and null move compare the evaluation with fixed
   margins, and the nets' output spread grows each generation (std on the same positions:
-  i 332, j 449, l 469, the generation 2 A/B net 544; 2026-10-21). The decision is a timed
-  match; a net whose output std is >15% off `l`'s gets its `--rfp` margin checked.
+  i 332, j 449, l 469, the generation 2 A/B net 544; 2026-10-21; on another set, l 458,
+  `n/g2-warm-s0` 525, `o/g2b-warm-s0` 568; 2026-10-27). The decision is a timed match, each
+  net with its `--rfp` margin scaled to its spread.
 - Speed was worth about +75 Elo per doubling at 1 s/move with net c and the old engine
   (depth ~5); stale now that the search reaches depth 7-8, measure again before speed work.
 - Measure before building speed work: two of four attempts on 2026-10-15 were slower, a
@@ -144,6 +147,8 @@ dates in [benchmarks.md](benchmarks.md). "Per node": head to head at fixed depth
 
 | lever | kind | gain | how | kept |
 |---|---|---|---|---|
+| 14.83M vs 4.73M generation 2 positions (older games relabeled), warm from the previous best: `o/g2b-warm-s0` vs `n/g2-warm-s0` | data | +93 [+40, +145] (per node +49, +70 seed 0; +23, +35 seed 1) | time, SPRT 180 games | yes |
+| hidden 256 (from scratch) vs 128 (warm), 14.83M positions | net | −16 [−45, +12] (per node +14 against a common opponent) | time, SPRT 573 games | no |
 | new games (l, switches, 6 random plies) vs older positions (j's games), same labels and size | data | -19 (-60, +1 / -3, -15) | per node, 2 seeds | no effect |
 | 2.34M vs 1.15M generation 2 positions | data | +57 (+62, +53) | per node, 2 seeds | yes |
 | warm start from the previous best's weights vs from scratch | training | +35 (+44, +26) | per node, 2 seeds | yes |
@@ -159,7 +164,7 @@ dates in [benchmarks.md](benchmarks.md). "Per node": head to head at fixed depth
 | 6.9M vs 3.1M generation 0 positions (three game sources) | data | +128 | per node, from screens vs the fork | yes |
 | three game sources vs one, equal size | data | +10 (-13, +34) | per node, 2 seeds | no effect |
 | dropping the volatile half / oversampling it | data | -39 / -60 | per node, 2 seeds | no |
-| hidden 256 vs 128 | net | -11 | per node | no |
+| hidden 256 vs 128, 7.5M generation 1 positions | net | -11 | per node | no |
 | strategy scalars | net | +137 | time | yes |
 | reverse futility (`--rfp=100`) | search | +67 | time, SPRT | yes |
 | partial iterations | search | +50 | time, SPRT | yes |

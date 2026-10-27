@@ -2,6 +2,43 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-27: generation 2 at 14.8M positions: +93 at equal time
+
+The older games labeled again by generation 2's labeler on Colab (two v5e-1,
+`colab/01_relabel_instance{0,1}`): n4 (60 shards), n4j 20-75, d4 and d5 (30 each), at switched
+depth 5 with scalars, 10,109,055 positions in 176 shards, every one with the same labeler
+record as the local labels. About 118 positions per second per runtime (the plan assumed
+165 from the local ratio), ~55 units in all: ~5.4 units per million positions. With n4l and
+n4j 0-19, generation 2 has 14,834,901 positions (256 shards; 738,313 held out by opening).
+
+Three nets on all of it, lambda 0.9, head to head at depth 5 against `n/g2-warm-s0` (4.73M),
+400 games each, no forfeits:
+
+| net | holdout Pearson | best epoch | plain | with the match switches |
+|---|---|---|---|---|
+| `o/g2b-warm-s0`: hidden 128, from `n/g2-warm-s0`'s weights | 0.873 | 58 | +49 [+15, +83] | +70 [+35, +104] |
+| `o/g2b-warm-s1`: the same, seed 1 | 0.874 | 48 | +23 [-11, +58] | +35 [+1, +69] |
+| `o/g2b-h256-s0`: hidden 256, from scratch | 0.871 | 34 | +54 [+20, +89] | +84 [+49, +119] |
+
+Output std on the same 474,421 positions (8 g2mr6 shards): `l/lam09-s0` 458, `n/g2-warm-s0`
+525, `o/g2b-warm-s0` 568, `o/g2b-warm-s1` 577, `o/g2b-h256-s0` 561, so reverse futility
+margins of 124 and 122 by the 2026-10-22 rule (100 x std / `l`'s).
+
+Timed, both with the match switches and their scaled margins, 1 s per move, 6 games at a
+time, SPRT [0, 20], no forfeits:
+
+| match | games | score | Elo |
+|---|---|---|---|
+| `o/g2b-warm-s0` (`--rfp=124`) vs `n/g2-warm-s0` (`--rfp=115`) | 180, H1 | 63.1% [55.8, 69.8], W102 D23 L55 | **+93 [+40, +145]** |
+| `o/g2b-h256-s0` (`--rfp=122`) vs `o/g2b-warm-s0` (`--rfp=124`) | 573, H0 | 47.6% [43.6, 51.7], W226 D94 L253 | −16 [−45, +12] |
+
+The first: 77% as white and 49% as black, median 56 plies, 0.91 and 0.92 s per move.
+Readings. Three times the positions, from games of any source, plus the warm start, is
+worth about as much at equal time as the step from `l` to `n` (+104). Hidden 256 now fits
+as well as hidden 128 warm started (at 7.5M it did not), and its depth 5 edge (+14 over
+the warm net against the same opponent) does not survive its cost per node. `o/g2b-warm-s0`
+is the new best.
+
 ## 2026-10-22: generation 2's round: what helped
 
 The n4l games on Colab (two v5e-1): 60,000 self play games of `l/lam09-s0` with the match
