@@ -10,7 +10,7 @@ How a round goes, what a label is, and the rules learned so far. Measured number
 | 1. self play | `hive-label --games ... --depth 4 --opening-plies 6 --engine-options "cmd=<fork> --nnue <net> <match switches>"` | `colab/01_generate_instance{0,1}` | ~1 h per 60k games on two runtimes |
 | 2. labels | `hive-label --relabel <games> --depths "" --nnue <labeler> --nnue-depths 5 --nnue-options "<switches>" --scalars`, then `hive-encode --radius 6` | `colab/01_relabel_instance{0,1}` or local | plain depth 5: ~53 positions/s per Colab runtime (v5e-1 = v6e-1), 46/s on the Ryzen; with the switches ~118/s per v5e-1 runtime (~5.4 units per million positions, 2026-10-27), 143/s on the Ryzen |
 | 3. scalars | `hive-label --relabel <labeled> --depths "" --scalars`, then `hive-encode --radius 6` (only for labels made without `--scalars`) | local | ~5 min per 4M positions |
-| 4. training | `hive-train <npz folder> <out> target=net5 hidden=128 l2=16 scalars=true lam=0.9 patience=5 max_epochs=60`, two seeds | local GPU (ROCm) | ~5 s per epoch per 4M positions |
+| 4. training | `hive-train <npz folder> <out> target=net5 hidden=128 l2=16 scalars=true lam=0.9 patience=5 max_epochs=60`, two seeds; `hive-export <out>/weights.npz` writes the engine's `weights.bin` | local GPU (ROCm) | ~5 s per epoch per 4M positions |
 | 5. screen | `hive-tournament --a "cmd=<fork> --nnue <net>,depth=5" --b "cmd=<fork>,depth=5" --games 400` | local, 14 workers | ~7 min |
 | 6. timed matches | `hive-tournament ... seconds=1 ... --games 800 [--sprt 0 20]` | local (6 workers, ~2.2 h) or `colab/03_match_{a,b}` (~40 min, ~4 units) | |
 
@@ -93,6 +93,17 @@ and play use the options that won a timed match:
 
 Tested and off: `--quiet-search` (fixed but about 5x slower, −243), `--aspiration-window=50`
 (+10 [−24, +44]), `--lmr-scale=2.5` (+7 [−18, +31]), `--root-pvs` (+5 [−19, +29]), `--lmr-history` (+3 [−21, +27]). A switch joins a label definition only at a deliberate generation change.
+
+## Releases
+
+One per generation's best net, after its timed match. `nets/release.env` names the net
+(copied into `nets/`) and its `--rfp` margin; `scripts/build_release.sh` embeds both
+(cargo feature `bundled-net`: the five match switches, one thread, flags still override),
+and `tests/test_release.py` checks it searches exactly like the plain build with those
+flags. Then the headline match of the release binary with its defaults vs nokamute 1.0.3
+(800 games, 1 s per move), the notes in `docs/releases/v<x>.md`, `ENGINE_VERSION` in the
+fork and the version in pyproject.toml; the user tags (`tocandira-v<x>` on the fork, `v<x>`
+here) and `.github/workflows/release.yml` publishes Linux and Windows binaries and the net.
 
 ## Rules learned the hard way
 

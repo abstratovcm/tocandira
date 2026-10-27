@@ -2,6 +2,17 @@
 
 Dated records. Newest first. Machine unless stated: Ryzen 7 5700G, 16 threads, Linux.
 
+## 2026-10-27: v1.0.0, the release binary against nokamute 1.0.3
+
+The release build (`scripts/build_release.sh`: `o/g2b-warm-s0` embedded, the five match
+switches with `--rfp=124`, one thread, all as defaults) against the frozen reference, no
+flags on either side, 1 s per move, 6 games at a time, 800 games: **97.8% [96.5, 98.6],
++660 [+579, +742]**, W779 D7 L14, 97% as white and 98% as black, median 35 plies, 0.81 and
+0.87 s per move, no forfeits, 63 min. `l/lam09-s0` scored 97.7% on 2026-10-20: the scale
+is saturated, and the +93 between the two nets shows only head to head. The release
+searches exactly like the plain build with the same net and flags (`tests/test_release.py`,
+every position of a 40 ply game). Records in runs/matches/v1.0.0-vs-ref-1s.jsonl.
+
 ## 2026-10-27: generation 2 at 14.8M positions: +93 at equal time
 
 The older games labeled again by generation 2's labeler on Colab (two v5e-1,

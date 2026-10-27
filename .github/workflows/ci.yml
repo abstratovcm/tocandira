@@ -15,6 +15,7 @@ jobs:
           workspaces: engine/nokamute
       - run: cargo build --release
         working-directory: engine/nokamute
+      - run: scripts/build_release.sh
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
       - run: uv run ruff check

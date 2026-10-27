@@ -1,0 +1,43 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+      - run: sudo apt-get update && sudo apt-get install -y mingw-w64
+      - run: scripts/build_release.sh --windows
+      - name: Package
+        run: |
+          source nets/release.env
+          B=engine/nokamute/target/bundled
+          mkdir -p dist/linux dist/win
+          for d in dist/linux dist/win; do
+            cp LICENSE $d/LICENSE
+            cp engine/nokamute/LICENSE.md $d/LICENSE-nokamute.md
+          done
+          cp $B/release/nokamute dist/linux/tocandira
+          strip dist/linux/tocandira
+          cp $B/x86_64-pc-windows-gnu/release/nokamute.exe dist/win/tocandira.exe
+          tar czf tocandira_linux_amd64.tar.gz --owner=0 --group=0 -C dist/linux .
+          (cd dist/win && zip ../../tocandira_win64.zip *)
+          cp "$TOCANDIRA_NET" .
+          echo "NET=$(basename "$TOCANDIRA_NET")" >> "$GITHUB_ENV"
+      - run: >
+          gh release create "$GITHUB_REF_NAME" --title "tocandira $GITHUB_REF_NAME"
+          --notes-file "docs/releases/$GITHUB_REF_NAME.md"
+          tocandira_linux_amd64.tar.gz tocandira_win64.zip "$NET"
+        env:
+          GH_TOKEN: ${{ github.token }}
